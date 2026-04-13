@@ -2,6 +2,20 @@
 //!
 //! These types are serialized across core, TUI, app-server, and SDK boundaries, so field defaults
 //! are used to preserve compatibility when older payloads omit newly introduced attributes.
+//!
+//! 📄 이 모듈이 하는 일:
+//!   OpenAI/Codex 모델들의 공통 메타데이터와 옵션 타입을 한곳에 모아 둔다.
+//!   비유로 말하면 여러 자동차 모델의 옵션표, 기본값, 업그레이드 안내를 같이 적어 둔 카탈로그다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/core`
+//!   - `codex-rs/tui`
+//!   - `codex-rs/app-server`
+//!   - SDK/프로토콜 직렬화 코드
+//!
+//! 🧩 핵심 개념:
+//!   - preset = 모델 한 종류의 기본 안내 카드
+//!   - field default = 옛날 클라이언트가 새 칸을 몰라도 기본값으로 이어서 읽게 하는 안전장치
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -23,6 +37,7 @@ const PERSONALITY_PLACEHOLDER: &str = "{{ personality }}";
 pub const SPEED_TIER_FAST: &str = "fast";
 
 /// See https://platform.openai.com/docs/guides/reasoning?api-mode=responses#get-started-with-reasoning
+/// 🍳 이 enum은 모델이 얼마나 깊게 생각할지 고르는 기어 단수표다.
 #[derive(
     Debug,
     Serialize,
@@ -53,6 +68,7 @@ pub enum ReasoningEffort {
 impl FromStr for ReasoningEffort {
     type Err = String;
 
+    /// 🍳 이 함수는 문자열 reasoning effort를 enum 기어로 바꾼다.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_value(serde_json::Value::String(s.to_string()))
             .map_err(|_| format!("invalid reasoning_effort: {s}"))
@@ -60,6 +76,7 @@ impl FromStr for ReasoningEffort {
 }
 
 /// Canonical user-input modality tags advertised by a model.
+/// 🍳 이 enum은 모델이 어떤 입력 재료를 받을 수 있는지 적는 재료표다.
 #[derive(
     Debug,
     Serialize,
@@ -87,11 +104,13 @@ pub enum InputModality {
 ///
 /// Legacy payloads predate modality metadata, so we conservatively assume both text and images are
 /// accepted unless a preset explicitly narrows support.
+/// 🍳 이 함수는 옛 payload가 modality 정보를 안 줬을 때 text+image 둘 다 된다고 가정하는 기본값이다.
 pub fn default_input_modalities() -> Vec<InputModality> {
     vec![InputModality::Text, InputModality::Image]
 }
 
 /// A reasoning effort option that can be surfaced for a model.
+/// 🍳 이 구조체는 reasoning 단계 하나와 그 설명문을 짝지은 옵션 카드다.
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq, Eq)]
 pub struct ReasoningEffortPreset {
     /// Effort level that the model supports.
@@ -100,6 +119,7 @@ pub struct ReasoningEffortPreset {
     pub description: String,
 }
 
+/// 🍳 이 구조체는 특정 모델을 더 좋은 모델로 옮길 때 보여 줄 업그레이드 안내문이다.
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq)]
 pub struct ModelUpgrade {
     pub id: String,
@@ -110,12 +130,15 @@ pub struct ModelUpgrade {
     pub migration_markdown: Option<String>,
 }
 
+/// 🍳 이 구조체는 새로 쓸 수 있게 된 모델을 사용자에게 알려 주는 짧은 환영 문구다.
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq, Eq)]
 pub struct ModelAvailabilityNux {
     pub message: String,
 }
 
 /// Metadata describing a Codex-supported model.
+/// 🍳 이 구조체는 모델 한 종의 기본 설명서다.
+///   모델 id/이름/지원 옵션/기본값 → picker와 API가 함께 보는 카탈로그 카드
 #[derive(Debug, Clone, Deserialize, Serialize, TS, JsonSchema, PartialEq)]
 pub struct ModelPreset {
     /// Stable identifier for the preset.
@@ -152,6 +175,7 @@ pub struct ModelPreset {
 }
 
 /// Visibility of a model in the picker or APIs.
+/// 🍳 이 enum은 모델을 목록에 보여 줄지 숨길지 정하는 진열장 스위치다.
 #[derive(
     Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema, EnumIter, Display,
 )]
@@ -164,6 +188,7 @@ pub enum ModelVisibility {
 }
 
 /// Shell execution capability for a model.
+/// 🍳 이 enum은 모델이 어떤 shell 실행 도구를 쓸 수 있는지 고르는 도구함 라벨이다.
 #[derive(
     Debug,
     Serialize,
@@ -206,6 +231,7 @@ pub enum WebSearchToolType {
 }
 
 /// Server-provided truncation policy metadata for a model.
+/// 🍳 이 enum은 긴 텍스트를 bytes 기준으로 자를지, tokens 기준으로 자를지 고르는 자 규칙이다.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TruncationMode {
@@ -213,6 +239,7 @@ pub enum TruncationMode {
     Tokens,
 }
 
+/// 🍳 이 구조체는 잘라내기 규칙(방식 + 한도)을 함께 적는 카드다.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema)]
 pub struct TruncationPolicyConfig {
     pub mode: TruncationMode,
@@ -220,6 +247,7 @@ pub struct TruncationPolicyConfig {
 }
 
 impl TruncationPolicyConfig {
+    /// 🍳 이 함수는 byte 기준 잘라내기 규칙을 만든다.
     pub const fn bytes(limit: i64) -> Self {
         Self {
             mode: TruncationMode::Bytes,
@@ -227,6 +255,7 @@ impl TruncationPolicyConfig {
         }
     }
 
+    /// 🍳 이 함수는 token 기준 잘라내기 규칙을 만든다.
     pub const fn tokens(limit: i64) -> Self {
         Self {
             mode: TruncationMode::Tokens,
@@ -236,6 +265,7 @@ impl TruncationPolicyConfig {
 }
 
 /// Semantic version triple encoded as an array in JSON (e.g. [0, 62, 0]).
+/// 🍳 이 구조체는 버전 번호 3칸을 한 줄로 담는 작은 상자다.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, TS, JsonSchema)]
 pub struct ClientVersion(pub i32, pub i32, pub i32);
 
