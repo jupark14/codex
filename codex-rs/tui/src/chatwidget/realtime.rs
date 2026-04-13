@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   ChatWidget 안에서 realtime 대화의 시작/종료, WebRTC/WebSocket 연결, 오디오 입출력을 이어 주는 상태를 관리한다.
+//!   비유로 말하면 라이브 통화 부스에서 "연결 중", "통화 중", "끊는 중" 상태를 보고 마이크와 스피커를 켜고 끄는 진행 요원이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/chatwidget.rs`
+//!   - realtime voice/WebRTC 연동 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `RealtimeConversationPhase` = 라이브 대화의 큰 상태 단계
+//!   - transport = WebSocket/WebRTC 중 실제 통로 선택
+
 use super::*;
 use codex_config::config_toml::RealtimeTransport;
 use codex_protocol::protocol::ConversationStartParams;
@@ -15,6 +27,7 @@ use std::sync::atomic::AtomicU16;
 #[cfg(not(target_os = "linux"))]
 use std::time::Duration;
 
+/// 🍳 이 enum은 realtime 대화가 지금 어느 단계인지 보여 주는 상태 신호등이다.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum RealtimeConversationPhase {
     #[default]
@@ -24,6 +37,7 @@ pub(super) enum RealtimeConversationPhase {
     Stopping,
 }
 
+/// 🍳 이 구조체는 realtime UI가 기억해야 하는 현재 연결/오디오 상태를 묶는다.
 #[derive(Default)]
 pub(super) struct RealtimeConversationUiState {
     pub(super) phase: RealtimeConversationPhase,
@@ -50,6 +64,7 @@ enum RealtimeConversationUiTransport {
 }
 
 impl RealtimeConversationUiState {
+    /// 🍳 현재 대화가 완전히 꺼진 상태가 아닌지 확인한다.
     pub(super) fn is_live(&self) -> bool {
         matches!(
             self.phase,
@@ -65,6 +80,7 @@ impl RealtimeConversationUiState {
     }
 }
 
+/// 🍳 이 구조체는 렌더링된 사용자 메시지의 핵심 비교 재료를 담는다.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct RenderedUserMessageEvent {
     pub(super) message: String,
@@ -73,6 +89,7 @@ pub(super) struct RenderedUserMessageEvent {
     pub(super) text_elements: Vec<TextElement>,
 }
 
+/// 🍳 pending steer와 실제 렌더링된 사용자 메시지를 비교할 때 쓰는 간단 키다.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct PendingSteerCompareKey {
     pub(super) message: String,
@@ -80,6 +97,7 @@ pub(super) struct PendingSteerCompareKey {
 }
 
 impl ChatWidget {
+    /// 🍳 네 조각(텍스트/텍스트 요소/로컬 이미지/원격 이미지)을 합쳐 렌더링용 사용자 메시지 이벤트를 만든다.
     pub(super) fn rendered_user_message_event_from_parts(
         message: String,
         text_elements: Vec<TextElement>,
@@ -94,6 +112,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 legacy `UserMessageEvent`를 렌더링용 비교 구조로 바꾼다.
     pub(super) fn rendered_user_message_event_from_event(
         event: &UserMessageEvent,
     ) -> RenderedUserMessageEvent {
@@ -110,6 +129,7 @@ impl ChatWidget {
     /// committed `ItemCompleted(UserMessage)` emitted after core drains input, which
     /// preserves flattened text and total image count but not UI-only text ranges or
     /// local image paths.
+    /// 🍳 pending steer를 "텍스트 + 총 이미지 수" 비교 키로 단순화한다.
     pub(super) fn pending_steer_compare_key_from_items(
         items: &[UserInput],
     ) -> PendingSteerCompareKey {
@@ -194,6 +214,7 @@ impl ChatWidget {
         vec![("/realtime".to_string(), "stop live voice".to_string())]
     }
 
+    /// 🍳 사용자가 UI에서 realtime 중지를 눌렀을 때 닫기 요청을 보낸다.
     pub(super) fn stop_realtime_conversation_from_ui(&mut self) {
         self.request_realtime_conversation_close(/*info_message*/ None);
     }
@@ -218,10 +239,12 @@ impl ChatWidget {
         self.set_footer_hint_override(Some(Self::realtime_footer_hint_items()));
         match self.config.realtime.transport {
             RealtimeTransport::Websocket => {
+                // 🌐 WebSocket 모드는 곧바로 세션 시작 요청을 보내면 된다.
                 self.realtime_conversation.transport = RealtimeConversationUiTransport::Websocket;
                 self.submit_realtime_conversation_start(/*transport*/ None);
             }
             RealtimeTransport::WebRtc => {
+                // 📞 WebRTC 모드는 offer 생성 비동기 작업부터 시작한다.
                 self.realtime_conversation.transport =
                     RealtimeConversationUiTransport::Webrtc { handle: None };
                 start_realtime_webrtc_offer_task(self.app_event_tx.clone());
@@ -234,6 +257,7 @@ impl ChatWidget {
         &mut self,
         transport: Option<ConversationStartTransport>,
     ) {
+        // 📨 실제 세션 시작은 AppCommand 하나로 보내서 app/core가 transport 세부값을 처리하게 한다.
         self.submit_op(AppCommand::realtime_conversation_start(
             ConversationStartParams {
                 prompt: None,
@@ -244,6 +268,7 @@ impl ChatWidget {
         ));
     }
 
+    /// 🍳 realtime 대화를 닫으라고 요청하면서 로컬 오디오와 transport도 함께 정리한다.
     pub(super) fn request_realtime_conversation_close(&mut self, info_message: Option<String>) {
         if !self.realtime_conversation.is_live() {
             if let Some(message) = info_message {
@@ -290,6 +315,7 @@ impl ChatWidget {
         &mut self,
         ev: RealtimeConversationStartedEvent,
     ) {
+        // 🚪 실제 시작 신호가 오면 transport 종류에 맞춰 phase와 오디오를 맞춘다.
         if !self.realtime_conversation_enabled() {
             self.request_realtime_conversation_close(/*info_message*/ None);
             return;
@@ -309,6 +335,7 @@ impl ChatWidget {
         &mut self,
         ev: RealtimeConversationRealtimeEvent,
     ) {
+        // 🔇 WebRTC에서는 일부 이벤트를 transport 레벨에서 이미 반영하므로 중복 처리하지 않는다.
         if self.realtime_conversation_uses_webrtc()
             && matches!(
                 ev.payload,
@@ -464,6 +491,7 @@ impl ChatWidget {
         )
     }
 
+    /// 🍳 열려 있는 WebRTC handle이 있으면 안전하게 닫는다.
     fn close_realtime_webrtc_transport(&mut self) {
         if let RealtimeConversationUiTransport::Webrtc { handle } =
             &mut self.realtime_conversation.transport
@@ -473,6 +501,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 들어온 오디오 프레임을 플레이어 큐에 넣는다.
     fn enqueue_realtime_audio_out(&mut self, frame: &RealtimeAudioFrame) {
         #[cfg(not(target_os = "linux"))]
         {
@@ -619,6 +648,7 @@ impl ChatWidget {
 }
 
 fn start_realtime_webrtc_offer_task(app_event_tx: AppEventSender) {
+    // 🏗️ offer 생성과 transport 이벤트 수집은 별도 스레드에서 돌려 UI를 막지 않는다.
     std::thread::spawn(move || {
         let result = match RealtimeWebrtcSession::start() {
             Ok(started) => {
