@@ -24,6 +24,18 @@
 //! .on_confirm(|selected_ids, tx| { /* handle confirmation */ })
 //! .build();
 //! ```
+//!
+//! 📄 이 파일이 하는 일:
+//!   여러 항목을 검색하면서 체크/해제할 수 있는 multi-select popup을 제공한다.
+//!   비유로 말하면 옵션 목록표에서 검색어로 줄이고 체크박스를 켜고 끄며 원하는 것만 고르는 장바구니다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - 여러 옵션을 동시에 켜고 끄는 picker UI
+//!
+//! 🧩 핵심 개념:
+//!   - `filtered_indices` = 현재 검색어에 맞는 원본 항목 번호표
+//!   - callback = 토글/확인/취소 순간 바깥으로 알려 주는 후크
 
 use codex_utils_fuzzy_match::fuzzy_match;
 use crossterm::event::KeyCode;
@@ -65,6 +77,7 @@ const SEARCH_PLACEHOLDER: &str = "Type to search";
 const SEARCH_PROMPT_PREFIX: &str = "> ";
 
 /// Direction for reordering items in the list.
+/// 🍳 이 enum은 항목 순서를 위/아래로 옮길 방향표다.
 enum Direction {
     Up,
     Down,
@@ -72,6 +85,7 @@ enum Direction {
 
 /// Callback invoked when any item's state changes (toggled or reordered).
 /// Receives the full list of items and the event sender.
+/// 🍳 항목 상태가 바뀔 때 바깥으로 알려 주는 콜백 규약이다.
 pub type ChangeCallBack = Box<dyn Fn(&[MultiSelectItem], &AppEventSender) + Send + Sync>;
 
 /// Callback invoked when the user confirms their selection (presses Enter).
@@ -89,6 +103,7 @@ pub type PreviewCallback = Box<dyn Fn(&[MultiSelectItem]) -> Option<Line<'static
 ///
 /// Each item has a unique identifier, display name, optional description,
 /// and an enabled/disabled state that can be toggled by the user.
+/// 🍳 이 구조체는 체크 가능한 항목 한 줄의 데이터 카드다.
 #[derive(Default)]
 pub(crate) struct MultiSelectItem {
     /// Unique identifier returned in the confirm callback when this item is enabled.
@@ -115,6 +130,7 @@ pub(crate) struct MultiSelectItem {
 /// - Use Left/Right arrows to reorder items (if ordering is enabled)
 ///
 /// Create instances using the builder pattern via [`MultiSelectPicker::new`].
+/// 🍳 이 구조체는 검색/체크/재정렬까지 관리하는 multi-select popup 본체다.
 pub(crate) struct MultiSelectPicker {
     /// All items in the picker (unfiltered).
     items: Vec<MultiSelectItem>,
@@ -167,6 +183,7 @@ impl MultiSelectPicker {
     /// * `title` - The main title displayed at the top of the picker
     /// * `subtitle` - Optional subtitle displayed below the title (dimmed)
     /// * `app_event_tx` - Event sender for dispatching application events
+    /// 🍳 이 함수는 builder를 만들어 popup 설정을 차근차근 채우게 한다.
     pub fn builder(
         title: String,
         subtitle: Option<String>,
@@ -180,6 +197,7 @@ impl MultiSelectPicker {
     /// Updates `filtered_indices` to contain only matching items, sorted by
     /// fuzzy match score. Attempts to preserve the current selection if it
     /// still matches the filter.
+    /// 🍳 이 함수는 현재 검색어로 항목을 다시 걸러 보고 선택 위치도 최대한 유지한다.
     fn apply_filter(&mut self) {
         // Filter + sort while preserving the current selection when possible.
         let previously_selected = self
@@ -225,16 +243,19 @@ impl MultiSelectPicker {
     }
 
     /// Returns the number of items visible after filtering.
+    /// 🍳 필터 뒤에 실제로 보이는 항목 수를 돌려준다.
     fn visible_len(&self) -> usize {
         self.filtered_indices.len()
     }
 
     /// Returns the maximum number of rows that can be displayed at once.
+    /// 🍳 popup이 한 번에 보여 줄 최대 행 수를 계산한다.
     fn max_visible_rows(len: usize) -> usize {
         MAX_POPUP_ROWS.min(len.max(1))
     }
 
     /// Calculates the width available for row content (accounts for borders).
+    /// 🍳 테두리를 빼고 실제 행 내용이 쓸 수 있는 폭을 계산한다.
     fn rows_width(total_width: u16) -> u16 {
         total_width.saturating_sub(2)
     }
