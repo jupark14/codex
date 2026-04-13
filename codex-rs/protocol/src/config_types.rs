@@ -1,3 +1,16 @@
+//! 📄 이 모듈이 하는 일:
+//!   설정 파일과 API가 공유하는 공통 enum/struct들을 한곳에 모아 둔다.
+//!   비유로 말하면 건물 전체에서 같이 쓰는 스위치, 다이얼, 체크박스 모양을 모아 둔 제어판 부품 창고다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/core`
+//!   - `codex-rs/protocol/src/lib.rs`
+//!   - 설정 직렬화/역직렬화와 UI 설정 표시 코드
+//!
+//! 🧩 핵심 개념:
+//!   - enum 설정값 = 사용자가 고를 수 있는 스위치 자리
+//!   - `merge`/`apply_mask` = 위에서 덮어쓴 값만 새로 입히는 투명 필름
+
 use codex_utils_absolute_path::AbsolutePathBuf;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -13,6 +26,7 @@ use crate::openai_models::ReasoningEffort;
 /// A summary of the reasoning performed by the model. This can be useful for
 /// debugging and understanding the model's reasoning process.
 /// See https://platform.openai.com/docs/guides/reasoning?api-mode=responses#reasoning-summaries
+/// 🍳 이 enum은 reasoning 설명을 얼마나 자세히 보여 줄지 정하는 요약 다이얼이다.
 #[derive(
     Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq, Eq, Display, JsonSchema, TS,
 )]
@@ -29,6 +43,7 @@ pub enum ReasoningSummary {
 
 /// Controls output length/detail on GPT-5 models via the Responses API.
 /// Serialized with lowercase values to match the OpenAI API.
+/// 🍳 이 enum은 답변 길이를 low/medium/high 단계로 고르는 볼륨 노브다.
 #[derive(
     Hash,
     Debug,
@@ -151,6 +166,8 @@ pub struct WebSearchLocation {
 }
 
 impl WebSearchLocation {
+    /// 🍳 이 함수는 기본 위치 카드 위에 덮어쓰기 위치 카드를 겹쳐 붙인다.
+    ///   `other`에 값이 있으면 그걸 우선 쓰고, 없으면 기존 값을 유지한다.
     pub fn merge(&self, other: &Self) -> Self {
         Self {
             country: other.country.clone().or_else(|| self.country.clone()),
@@ -170,6 +187,8 @@ pub struct WebSearchToolConfig {
 }
 
 impl WebSearchToolConfig {
+    /// 🍳 이 함수는 web search 도구 설정 두 장을 겹쳐서 최종 설정 한 장으로 만든다.
+    ///   overlay 값이 있으면 우선, 없으면 base 유지
     pub fn merge(&self, other: &Self) -> Self {
         Self {
             context_size: other.context_size.or(self.context_size),
@@ -268,6 +287,7 @@ const DEFAULT_PROVIDER_AUTH_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_PROVIDER_AUTH_REFRESH_INTERVAL_MS: u64 = 300_000;
 
 /// Configuration for obtaining a provider bearer token from a command.
+/// 🍳 이 구조체는 "토큰을 어떻게 받아 올지"를 적는 자동판매기 설정표다.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct ModelProviderAuthInfo {
@@ -294,15 +314,19 @@ pub struct ModelProviderAuthInfo {
 }
 
 impl ModelProviderAuthInfo {
+    /// 🍳 이 함수는 밀리초 숫자를 실제 대기시간 `Duration`으로 바꾼다.
     pub fn timeout(&self) -> Duration {
         Duration::from_millis(self.timeout_ms.get())
     }
 
+    /// 🍳 이 함수는 refresh 간격이 0이면 "자동 새로고침 없음"으로 보고,
+    ///   그 외 숫자는 `Duration`으로 바꿔 준다.
     pub fn refresh_interval(&self) -> Option<Duration> {
         NonZeroU64::new(self.refresh_interval_ms).map(|value| Duration::from_millis(value.get()))
     }
 }
 
+/// 🍳 이 함수는 provider auth timeout 기본값을 "0 금지" 상자에 담아 돌려준다.
 fn default_provider_auth_timeout_ms() -> NonZeroU64 {
     non_zero_u64(
         DEFAULT_PROVIDER_AUTH_TIMEOUT_MS,
@@ -314,6 +338,7 @@ fn default_provider_auth_refresh_interval_ms() -> u64 {
     DEFAULT_PROVIDER_AUTH_REFRESH_INTERVAL_MS
 }
 
+/// 🍳 이 함수는 0이면 안 되는 숫자를 `NonZeroU64`로 바꾸는 검사대다.
 fn non_zero_u64(value: u64, field_name: &str) -> NonZeroU64 {
     match NonZeroU64::new(value) {
         Some(value) => value,
@@ -321,6 +346,8 @@ fn non_zero_u64(value: u64, field_name: &str) -> NonZeroU64 {
     }
 }
 
+/// 🍳 이 함수는 provider auth 명령의 기본 작업 폴더를 정한다.
+///   가능하면 `.`를 절대경로로 해석하고, 그게 안 되면 현재 폴더를 직접 읽는다.
 fn default_provider_auth_cwd() -> AbsolutePathBuf {
     let deserializer = serde::de::value::StrDeserializer::<serde::de::value::Error>::new(".");
     if let Ok(cwd) = AbsolutePathBuf::deserialize(deserializer) {
@@ -333,6 +360,7 @@ fn default_provider_auth_cwd() -> AbsolutePathBuf {
     }
 }
 
+/// 🍳 이 함수는 어떤 경로가 "기본 cwd와 같은지" 체크해 직렬화에서 생략할지 결정한다.
 fn is_default_provider_auth_cwd(path: &AbsolutePathBuf) -> bool {
     path == &default_provider_auth_cwd()
 }
@@ -412,6 +440,7 @@ pub enum ModeKind {
 pub const TUI_VISIBLE_COLLABORATION_MODES: [ModeKind; 2] = [ModeKind::Default, ModeKind::Plan];
 
 impl ModeKind {
+    /// 🍳 이 함수는 mode를 UI에 보일 친근한 이름으로 바꾼다.
     pub const fn display_name(self) -> &'static str {
         match self {
             Self::Plan => "Plan",
@@ -425,6 +454,7 @@ impl ModeKind {
         matches!(self, Self::Plan | Self::Default)
     }
 
+    /// 🍳 이 함수는 현재 mode가 사람에게 추가 질문을 요청할 수 있는지 확인한다.
     pub const fn allows_request_user_input(self) -> bool {
         matches!(self, Self::Plan)
     }
@@ -444,10 +474,12 @@ impl CollaborationMode {
         &self.settings
     }
 
+    /// 🍳 이 함수는 현재 협업 모드가 쓰는 모델 이름표를 꺼낸다.
     pub fn model(&self) -> &str {
         self.settings_ref().model.as_str()
     }
 
+    /// 🍳 이 함수는 reasoning effort 설정만 골라 읽는다.
     pub fn reasoning_effort(&self) -> Option<ReasoningEffort> {
         self.settings_ref().reasoning_effort
     }
@@ -459,6 +491,8 @@ impl CollaborationMode {
     /// - `developer_instructions`: `Some(Some(s))` to set instructions, `Some(None)` to clear them, `None` to keep current
     ///
     /// Returns a new `CollaborationMode` with updated values, preserving the mode.
+    /// 🍳 이 함수는 협업 모드 원본은 그대로 두고,
+    ///   바꿀 칸만 새 값으로 갈아 낀 복사본을 만든다.
     pub fn with_updates(
         &self,
         model: Option<String>,
@@ -484,6 +518,7 @@ impl CollaborationMode {
     /// the corresponding fields, while `None` values will preserve the original values.
     ///
     /// The `name` field in the mask is ignored as it's metadata for the mask itself.
+    /// 🍳 이 함수는 스티커(mask)에 적힌 칸만 덮어붙여 최종 모드를 만든다.
     pub fn apply_mask(&self, mask: &CollaborationModeMask) -> Self {
         let settings = self.settings_ref();
         CollaborationMode {
