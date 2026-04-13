@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   TUI에서 발생한 사용자 행동을 `Op` 기반 앱 명령으로 감싸서 한 곳으로 모은다.
+//!   비유로 말하면 버튼 클릭, 승인 응답, 새 세션 시작 같은 일을 "행동 주문서"로 적어 전달하는 접수함이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - 여러 위젯/overlay가 app 레벨에 명령을 보낼 때
+//!
+//! 🧩 핵심 개념:
+//!   - `AppCommand` = 실제 전송 가능한 포장된 명령
+//!   - `AppCommandView` = 명령을 읽기 좋게 분해해서 match 하기 위한 관찰창
+
 use std::path::PathBuf;
 
 use codex_config::types::ApprovalsReviewer;
@@ -23,9 +35,11 @@ use codex_protocol::user_input::UserInput;
 use serde::Serialize;
 use serde_json::Value;
 
+/// 🍳 이 구조체는 실제 `Op`를 앱 전용 명령 봉투에 넣은 래퍼다.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(crate) struct AppCommand(Op);
 
+/// 🍳 이 enum은 `AppCommand`를 읽기 쉽게 펼쳐 본 관찰 모드다.
 #[allow(clippy::large_enum_variant)]
 #[allow(dead_code)]
 pub(crate) enum AppCommandView<'a> {
@@ -109,10 +123,12 @@ pub(crate) enum AppCommandView<'a> {
 }
 
 impl AppCommand {
+    /// 🍳 이 함수는 인터럽트 명령서를 만든다.
     pub(crate) fn interrupt() -> Self {
         Self(Op::Interrupt)
     }
 
+    /// 🍳 이 함수는 백그라운드 터미널 청소 명령서를 만든다.
     pub(crate) fn clean_background_terminals() -> Self {
         Self(Op::CleanBackgroundTerminals)
     }
@@ -140,6 +156,7 @@ impl AppCommand {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// 🍳 이 함수는 사용자 입력 턴 한 번을 보내는 주문서를 만든다.
     pub(crate) fn user_turn(
         items: Vec<UserInput>,
         cwd: PathBuf,
@@ -170,6 +187,7 @@ impl AppCommand {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// 🍳 이 함수는 현재 턴의 실행 환경만 부분적으로 덮어쓰는 명령서를 만든다.
     pub(crate) fn override_turn_context(
         cwd: Option<PathBuf>,
         approval_policy: Option<AskForApproval>,
