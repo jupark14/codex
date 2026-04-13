@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   skill 목록을 popup에 띄우고, mention/앱 연결과 관련된 helper를 제공한다.
+//!   비유로 말하면 도구 보관함에서 어떤 skill을 보여 줄지, 어떤 이름표가 어떤 실물 도구를 가리키는지 정리해 주는 안내 데스크다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/chatwidget.rs`
+//!   - skill popup / skill 토글 / mention 해석 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - skill list = 현재 cwd에서 사용 가능한 skill 카드 목록
+//!   - tool mention = 텍스트 안 `$name` 또는 링크형 표기를 실제 skill/app 대상으로 다시 연결하는 과정
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -25,10 +37,12 @@ use codex_protocol::protocol::SkillMetadata as ProtocolSkillMetadata;
 use codex_protocol::protocol::SkillsListEntry;
 
 impl ChatWidget {
+    /// 🍳 composer에 `$`를 넣어 skill 목록 popup을 바로 열도록 유도한다.
     pub(crate) fn open_skills_list(&mut self) {
         self.insert_str("$");
     }
 
+    /// 🍳 skill 관련 행동 메뉴(목록 보기 / on-off 관리)를 띄운다.
     pub(crate) fn open_skills_menu(&mut self) {
         let items = vec![
             SelectionItem {
@@ -60,6 +74,7 @@ impl ChatWidget {
         });
     }
 
+    /// 🍳 현재 skill 상태를 토글할 수 있는 popup을 만든다.
     pub(crate) fn open_manage_skills_popup(&mut self) {
         if self.skills_all.is_empty() {
             self.add_info_message("No skills available.".to_string(), /*hint*/ None);
@@ -95,6 +110,7 @@ impl ChatWidget {
         self.bottom_pane.show_view(Box::new(view));
     }
 
+    /// 🍳 특정 skill path의 enabled 상태를 바꾸고 mention용 skill 집합도 갱신한다.
     pub(crate) fn update_skill_enabled(&mut self, path: PathBuf, enabled: bool) {
         let target = normalize_skill_config_path(&path);
         for skill in &mut self.skills_all {
@@ -105,6 +121,7 @@ impl ChatWidget {
         self.set_skills(Some(enabled_skills_for_mentions(&self.skills_all)));
     }
 
+    /// 🍳 skill 관리 popup이 닫힌 뒤 실제 변경된 개수를 계산해 요약 메시지를 보여 준다.
     pub(crate) fn handle_manage_skills_closed(&mut self) {
         let Some(initial_state) = self.skills_initial_state.take() else {
             return;
@@ -138,12 +155,14 @@ impl ChatWidget {
         );
     }
 
+    /// 🍳 app-server 응답에서 현재 cwd용 skill 목록만 꺼내 ChatWidget 상태에 넣는다.
     pub(crate) fn set_skills_from_response(&mut self, response: &ListSkillsResponseEvent) {
         let skills = skills_for_cwd(&self.config.cwd, &response.skills);
         self.skills_all = skills;
         self.set_skills(Some(enabled_skills_for_mentions(&self.skills_all)));
     }
 
+    /// 🍳 parsed command 중 SKILL.md 읽기를 실제 skill 이름이 붙은 라벨로 보강한다.
     pub(crate) fn annotate_skill_reads_in_parsed_cmd(
         &self,
         mut parsed_cmd: Vec<ParsedCommand>,
@@ -170,6 +189,7 @@ impl ChatWidget {
     }
 }
 
+/// 🍳 응답 전체에서 현재 작업 폴더(cwd)에 해당하는 skill 목록만 고른다.
 fn skills_for_cwd(cwd: &Path, skills_entries: &[SkillsListEntry]) -> Vec<ProtocolSkillMetadata> {
     skills_entries
         .iter()
@@ -178,6 +198,7 @@ fn skills_for_cwd(cwd: &Path, skills_entries: &[SkillsListEntry]) -> Vec<Protoco
         .unwrap_or_default()
 }
 
+/// 🍳 enabled=true인 skill만 mention 후보용 core 타입으로 바꿔 돌려준다.
 fn enabled_skills_for_mentions(skills: &[ProtocolSkillMetadata]) -> Vec<SkillMetadata> {
     skills
         .iter()
@@ -186,6 +207,7 @@ fn enabled_skills_for_mentions(skills: &[ProtocolSkillMetadata]) -> Vec<SkillMet
         .collect()
 }
 
+/// 🍳 프로토콜용 skill metadata를 core 쪽 `SkillMetadata`로 변환한다.
 fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> SkillMetadata {
     SkillMetadata {
         name: skill.name.clone(),
@@ -222,10 +244,12 @@ fn protocol_skill_to_core(skill: &ProtocolSkillMetadata) -> SkillMetadata {
     }
 }
 
+/// 🍳 skill 설정 경로를 canonicalize해서 같은 skill을 같은 경로로 비교하게 만든다.
 fn normalize_skill_config_path(path: &Path) -> PathBuf {
     dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
+/// 🍳 텍스트 안 tool mention과 이미 연결된 경로 정보를 합쳐 최종 tool mention 집합을 만든다.
 pub(crate) fn collect_tool_mentions(
     text: &str,
     mention_paths: &HashMap<String, String>,
@@ -239,6 +263,7 @@ pub(crate) fn collect_tool_mentions(
     mentions
 }
 
+/// 🍳 mention이 가리키는 skill 경로나 skill 이름을 기준으로 관련 skill 카드들을 찾아낸다.
 pub(crate) fn find_skill_mentions_with_tool_mentions(
     mentions: &ToolMentions,
     skills: &[SkillMetadata],
@@ -279,6 +304,7 @@ pub(crate) fn find_skill_mentions_with_tool_mentions(
     matches
 }
 
+/// 🍳 mention과 앱 목록을 대조해서 실제로 참조된 app만 골라낸다.
 pub(crate) fn find_app_mentions(
     mentions: &ToolMentions,
     apps: &[AppInfo],
@@ -317,15 +343,18 @@ pub(crate) fn find_app_mentions(
         .collect()
 }
 
+/// 🍳 텍스트에서 뽑아낸 tool mention 이름들과 링크 경로를 묶는 결과 상자다.
 pub(crate) struct ToolMentions {
     names: HashSet<String>,
     linked_paths: HashMap<String, String>,
 }
 
+/// 🍳 일반 텍스트에서 tool mention을 추출하는 기본 입구다.
 fn extract_tool_mentions_from_text(text: &str) -> ToolMentions {
     extract_tool_mentions_from_text_with_sigil(text, TOOL_MENTION_SIGIL)
 }
 
+/// 🍳 특정 sigil(`$` 등)을 기준으로 mention 이름과 링크형 표기를 찾아낸다.
 fn extract_tool_mentions_from_text_with_sigil(text: &str, sigil: char) -> ToolMentions {
     let text_bytes = text.as_bytes();
     let mut names: HashSet<String> = HashSet::new();
@@ -385,6 +414,7 @@ fn extract_tool_mentions_from_text_with_sigil(text: &str, sigil: char) -> ToolMe
     }
 }
 
+/// 🍳 `[$name](path)` 꼴의 링크형 tool mention을 파싱한다.
 fn parse_linked_tool_mention<'a>(
     text: &'a str,
     text_bytes: &[u8],
@@ -442,6 +472,7 @@ fn parse_linked_tool_mention<'a>(
     Some((name, path, path_end + 1))
 }
 
+/// 🍳 PATH/HOME 같은 흔한 환경변수 이름은 tool mention으로 오인하지 않게 걸러낸다.
 fn is_common_env_var(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     matches!(
@@ -460,18 +491,22 @@ fn is_common_env_var(name: &str) -> bool {
     )
 }
 
+/// 🍳 mention 이름에 들어갈 수 있는 문자인지 판별한다.
 fn is_mention_name_char(byte: u8) -> bool {
     matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'-')
 }
 
+/// 🍳 경로가 skill 계열인지 app/mcp/plugin 계열인지 구분한다.
 fn is_skill_path(path: &str) -> bool {
     !path.starts_with("app://") && !path.starts_with("mcp://") && !path.starts_with("plugin://")
 }
 
+/// 🍳 `skill://` 접두사가 있으면 떼고 비교용 경로만 남긴다.
 fn normalize_skill_path(path: &str) -> &str {
     path.strip_prefix("skill://").unwrap_or(path)
 }
 
+/// 🍳 `app://...` 경로에서 실제 app id만 꺼낸다.
 fn app_id_from_path(path: &str) -> Option<&str> {
     path.strip_prefix("app://")
         .filter(|value| !value.is_empty())
