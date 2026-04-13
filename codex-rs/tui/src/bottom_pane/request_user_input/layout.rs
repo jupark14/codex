@@ -1,8 +1,21 @@
+//! 📄 이 파일이 하는 일:
+//!   request-user-input 오버레이에서 진행줄, 질문, 선택지, 메모칸, footer를 어디에 배치할지 계산한다.
+//!   비유로 말하면 시험지에서 제목칸·문제칸·답안칸·안내문칸을 종이 높이에 맞춰 나눠 배치하는 인쇄 도우미다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/request_user_input/mod.rs`
+//!   - `codex-rs/tui/src/bottom_pane/request_user_input/render.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - `LayoutPlan` = 각 섹션이 몇 줄 차지할지 정한 청사진
+//!   - `LayoutSections` = 실제 `Rect` 좌표로 변환된 배치 결과
+
 use ratatui::layout::Rect;
 
 use super::DESIRED_SPACERS_BETWEEN_SECTIONS;
 use super::RequestUserInputOverlay;
 
+/// 🍳 이 구조체는 렌더링 단계가 바로 쓸 수 있는 섹션별 좌표 묶음이다.
 pub(super) struct LayoutSections {
     pub(super) progress_area: Rect,
     pub(super) question_area: Rect,
@@ -16,6 +29,7 @@ pub(super) struct LayoutSections {
 
 impl RequestUserInputOverlay {
     /// Compute layout sections, collapsing notes and hints as space shrinks.
+    /// 🍳 이 함수는 현재 크기 안에서 각 영역을 얼마나 줄이거나 유지할지 계산해 최종 섹션 좌표를 만든다.
     pub(super) fn layout_sections(&self, area: Rect) -> LayoutSections {
         let has_options = self.has_options();
         let notes_visible = !has_options || self.notes_ui_visible();
@@ -60,6 +74,7 @@ impl RequestUserInputOverlay {
     }
 
     /// Layout calculation when options are present.
+    /// 🍳 선택지가 있는 질문용 배치 계산기다.
     fn layout_with_options(
         &self,
         args: OptionsLayoutArgs,
@@ -96,6 +111,7 @@ impl RequestUserInputOverlay {
 
     /// Normal layout for options case: allocate footer + progress first, and
     /// only allocate notes (and its label) when explicitly visible.
+    /// 🍳 선택지 화면의 기본 배치 규칙을 계산한다.
     fn layout_with_options_normal(
         &self,
         args: OptionsNormalArgs,
@@ -200,6 +216,7 @@ impl RequestUserInputOverlay {
     /// Handles both tight layout (when space is constrained) and normal layout
     /// (when there's sufficient space for all elements).
     ///
+    /// 🍳 선택지가 없는 자유 입력 질문의 배치를 계산한다.
     fn layout_without_options(
         &self,
         available_height: u16,
@@ -222,6 +239,7 @@ impl RequestUserInputOverlay {
     }
 
     /// Tight layout for no-options case: truncate question to fit available space.
+    /// 🍳 공간이 아주 좁을 때 질문 줄 수를 잘라 맞추는 비상 배치다.
     fn layout_without_options_tight(
         &self,
         available_height: u16,
