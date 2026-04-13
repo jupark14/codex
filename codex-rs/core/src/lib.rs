@@ -1,4 +1,17 @@
 //! Root of the `codex-core` library.
+//!
+//! 📄 이 파일이 하는 일:
+//!   `codex-core` 안에 있는 모듈 출입문과 재수출 목록을 한 장에 모아 둔다.
+//!   비유로 말하면 큰 백화점 안내도처럼 "어느 층에 뭐가 있는지"와 "손님에게 어떤 문을 열어 줄지"를 정리한 표다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/exec`
+//!   - `codex-rs/tui`
+//!   - `codex-rs/app-server`
+//!
+//! 🧩 핵심 개념:
+//!   - `mod` = 창고 안쪽 방을 만든다는 뜻
+//!   - `pub use` = 바깥 손님이 긴 내부 주소를 몰라도 되게 정문에서 다시 안내해 주는 표지판
 
 // Prevent accidental direct writes to stdout/stderr in library code. All
 // user-visible output must go through the appropriate abstraction (e.g.,
@@ -196,6 +209,8 @@ pub use exec_policy::check_execpolicy_for_warnings;
 pub use exec_policy::format_exec_policy_error_with_source;
 pub use exec_policy::load_exec_policy;
 pub use file_watcher::FileWatcherEvent;
+// 🧭 아래 `pub use` 묶음은 여러 내부 방에 흩어진 기능을
+//    바깥 crate들이 찾기 쉽게 정문 근처 진열대로 다시 모아 둔 부분이다.
 pub use turn_metadata::build_turn_metadata_header;
 pub mod compact;
 pub(crate) mod memory_trace;
