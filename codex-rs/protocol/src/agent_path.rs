@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   협업 에이전트 경로를 안전한 절대경로 문자열 규칙으로 묶어 관리한다.
+//!   비유로 말하면 학교 사물함 주소를 `/root/3반/민수`처럼 정해진 형식으로만 적게 하는 주소 라벨기다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/protocol/src/lib.rs`
+//!   - 에이전트 경로를 주고받는 협업/프로토콜 코드
+//!
+//! 🧩 핵심 개념:
+//!   - `/root` = 모든 에이전트 주소가 시작해야 하는 정문
+//!   - `validate_*` 함수들 = 잘못된 주소표가 섞이지 않게 막는 검사대
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -6,6 +18,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 use ts_rs::TS;
 
+/// 🍳 이 구조체는 에이전트 주소를 그냥 문자열이 아니라 "검사 통과한 주소표"로 보관한다.
+///   경로 문자열 → 검증된 `AgentPath`
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema, TS,
 )]
@@ -18,10 +32,13 @@ impl AgentPath {
     pub const ROOT: &str = "/root";
     const ROOT_SEGMENT: &str = "root";
 
+    /// 🍳 이 함수는 모든 주소의 시작점인 정문 주소를 만든다.
     pub fn root() -> Self {
         Self(Self::ROOT.to_string())
     }
 
+    /// 🍳 이 함수는 문자열 주소를 받아 규칙 검사 후 `AgentPath` 상자에 넣는다.
+    ///   문자열 경로 → 성공 시 `AgentPath`, 실패 시 오류 문구
     pub fn from_string(path: String) -> Result<Self, String> {
         validate_absolute_path(path.as_str())?;
         Ok(Self(path))
@@ -31,10 +48,13 @@ impl AgentPath {
         self.0.as_str()
     }
 
+    /// 🍳 이 함수는 지금 주소가 정문(`/root`)인지 확인하는 경비표시다.
     pub fn is_root(&self) -> bool {
         self.as_str() == Self::ROOT
     }
 
+    /// 🍳 이 함수는 주소 맨 끝 칸 이름만 꺼낸다.
+    ///   `/root/researcher/worker` → `worker`
     pub fn name(&self) -> &str {
         if self.is_root() {
             return Self::ROOT_SEGMENT;
@@ -46,11 +66,15 @@ impl AgentPath {
             .unwrap_or(Self::ROOT_SEGMENT)
     }
 
+    /// 🍳 이 함수는 현재 주소 밑에 자식 에이전트 이름을 붙여 새 주소를 만든다.
+    ///   부모 주소 + 에이전트 이름 → 자식 주소
     pub fn join(&self, agent_name: &str) -> Result<Self, String> {
         validate_agent_name(agent_name)?;
         Self::from_string(format!("{self}/{agent_name}"))
     }
 
+    /// 🍳 이 함수는 상대주소/절대주소 둘 다 받아 현재 위치 기준 최종 주소를 계산한다.
+    ///   기준 주소 + reference → 최종 `AgentPath`
     pub fn resolve(&self, reference: &str) -> Result<Self, String> {
         if reference.is_empty() {
             return Err("agent path must not be empty".to_string());
@@ -117,6 +141,8 @@ impl fmt::Display for AgentPath {
     }
 }
 
+/// 🍳 이 함수는 에이전트 이름 한 칸이 규칙에 맞는지 검사한다.
+///   이름 문자열 → 통과 또는 오류
 fn validate_agent_name(agent_name: &str) -> Result<(), String> {
     if agent_name.is_empty() {
         return Err("agent_name must not be empty".to_string());
@@ -141,6 +167,8 @@ fn validate_agent_name(agent_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 🍳 이 함수는 절대경로가 `/root/...` 규칙을 지키는지 확인한다.
+///   절대경로 문자열 → 통과 또는 오류
 fn validate_absolute_path(path: &str) -> Result<(), String> {
     let Some(stripped) = path.strip_prefix('/') else {
         return Err("absolute agent paths must start with `/root`".to_string());
@@ -161,6 +189,8 @@ fn validate_absolute_path(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 🍳 이 함수는 상대 참조 경로가 끝 slash 없이 안전한 이름들로만 이뤄졌는지 본다.
+///   상대경로 문자열 → 통과 또는 오류
 fn validate_relative_reference(reference: &str) -> Result<(), String> {
     if reference.ends_with('/') {
         return Err("relative agent path must not end with `/`".to_string());
