@@ -4,6 +4,8 @@
 ///
 /// `rest_offset` is the byte index into the original line where `rest_after_name`
 /// starts after trimming leading whitespace (so `line[rest_offset..] == rest_after_name`).
+/// 🍳 이 함수는 `/plan foo bar` 같은 첫 줄을
+///   "명령 이름", "나머지 인자", "원문에서 인자가 시작하는 위치"로 나눠 준다.
 pub fn parse_slash_name(line: &str) -> Option<(&str, &str, usize)> {
     let stripped = line.strip_prefix('/')?;
     let mut name_end_in_stripped = stripped.len();
