@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   실험 기능 목록을 보여 주고 사용자가 켜고 끄는 popup view를 제공한다.
+//!   비유로 말하면 연구실 실험 스위치판을 띄워서 체크박스로 기능을 토글하게 하는 제어 패널이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - experimental feature 설정 popup
+//!
+//! 🧩 핵심 개념:
+//!   - `ExperimentalFeatureItem` = 기능 하나의 이름/설명/켜짐 상태 카드
+//!   - `ScrollState` = 현재 선택과 스크롤 범위를 기억하는 상태
+
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -29,6 +41,7 @@ use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::measure_rows_height;
 use super::selection_popup_common::render_rows;
 
+/// 🍳 이 구조체는 실험 기능 한 줄을 렌더링하기 위한 데이터 카드다.
 pub(crate) struct ExperimentalFeatureItem {
     pub feature: Feature,
     pub name: String,
@@ -36,6 +49,7 @@ pub(crate) struct ExperimentalFeatureItem {
     pub enabled: bool,
 }
 
+/// 🍳 이 구조체는 실험 기능 popup 전체 상태를 담는 본체다.
 pub(crate) struct ExperimentalFeaturesView {
     features: Vec<ExperimentalFeatureItem>,
     state: ScrollState,
@@ -46,6 +60,7 @@ pub(crate) struct ExperimentalFeaturesView {
 }
 
 impl ExperimentalFeaturesView {
+    /// 🍳 이 함수는 기능 목록과 이벤트 송신기를 받아 popup을 초기화한다.
     pub(crate) fn new(
         features: Vec<ExperimentalFeatureItem>,
         app_event_tx: AppEventSender,
@@ -76,10 +91,12 @@ impl ExperimentalFeaturesView {
         }
     }
 
+    /// 🍳 현재 보이는 기능 수를 돌려준다.
     fn visible_len(&self) -> usize {
         self.features.len()
     }
 
+    /// 🍳 이 함수는 기능 목록을 체크박스가 붙은 렌더링 행들로 바꾼다.
     fn build_rows(&self) -> Vec<GenericDisplayRow> {
         let mut rows = Vec::with_capacity(self.features.len());
         let selected_idx = self.state.selected_idx;
@@ -101,6 +118,7 @@ impl ExperimentalFeaturesView {
         rows
     }
 
+    /// 🍳 위쪽 항목으로 선택을 한 칸 움직인다.
     fn move_up(&mut self) {
         let len = self.visible_len();
         if len == 0 {
@@ -110,6 +128,7 @@ impl ExperimentalFeaturesView {
         self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
     }
 
+    /// 🍳 아래쪽 항목으로 선택을 한 칸 움직인다.
     fn move_down(&mut self) {
         let len = self.visible_len();
         if len == 0 {
@@ -119,6 +138,7 @@ impl ExperimentalFeaturesView {
         self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
     }
 
+    /// 🍳 현재 선택된 기능의 on/off 상태를 뒤집는다.
     fn toggle_selected(&mut self) {
         let Some(selected_idx) = self.state.selected_idx else {
             return;
@@ -129,6 +149,7 @@ impl ExperimentalFeaturesView {
         }
     }
 
+    /// 🍳 전체 popup 너비에서 실제 행 렌더링에 쓸 폭을 계산한다.
     fn rows_width(total_width: u16) -> u16 {
         total_width.saturating_sub(2)
     }
