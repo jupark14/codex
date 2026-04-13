@@ -16,12 +16,25 @@
 //!
 //! The module is intentionally narrow: text copy only, user-facing error strings,
 //! no reusable clipboard abstraction. Image paste lives in `clipboard_paste`.
+//!
+//! 📄 이 파일이 하는 일:
+//!   현재 환경(SSH/WSL/로컬)에 맞는 가장 적절한 방법으로 텍스트를 클립보드에 복사한다.
+//!   비유로 말하면 직접 우편함에 넣을지, 원격 전달선(OSC 52)로 보낼지, 윈도우 도우미에게 맡길지를 골라 주는 배달 분기대다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui`
+//!   - `/copy` 명령과 `Ctrl+O` hotkey 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - OSC 52 = SSH 넘어 로컬 터미널 클립보드로 보내는 원격 복사 통로
+//!   - clipboard lease = 일부 플랫폼에서 복사 내용을 유지하려면 프로세스가 쥐고 있어야 하는 핸들
 
 use base64::Engine;
 use std::io::Write;
 
 /// Maximum raw bytes we will base64-encode into an OSC 52 sequence.
 /// Large payloads are rejected before encoding to avoid overwhelming the terminal.
+/// 🍳 OSC 52로 보낼 때 너무 큰 복사본이 터미널을 괴롭히지 않게 막는 최대 크기다.
 const OSC52_MAX_RAW_BYTES: usize = 100_000;
 #[cfg(target_os = "macos")]
 static STDERR_SUPPRESSION_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> =
@@ -35,6 +48,7 @@ static STDERR_SUPPRESSION_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> =
 /// falls back to WSL PowerShell, then OSC 52, if needed.
 ///
 /// OSC 52 is supported by kitty, WezTerm, iTerm2, Ghostty, and others.
+/// 🍳 이 함수는 텍스트 복사의 대표 입구다.
 pub(crate) fn copy_to_clipboard(text: &str) -> Result<Option<ClipboardLease>, String> {
     copy_to_clipboard_with(
         text,
@@ -54,6 +68,7 @@ pub(crate) fn copy_to_clipboard(text: &str) -> Result<Option<ClipboardLease>, St
 /// the handle lives as long as the TUI does. On non-Linux native paths and OSC 52
 /// paths the lease is `None` — those backends do not require process-lifetime
 /// ownership.
+/// 🍳 이 구조체는 "복사 내용을 유지하려면 핸들을 계속 쥐고 있어야 하는" 플랫폼용 보관증이다.
 pub(crate) struct ClipboardLease {
     #[cfg(target_os = "linux")]
     _clipboard: Option<arboard::Clipboard>,
@@ -78,6 +93,7 @@ impl ClipboardLease {
 
 /// Core copy logic with injected backends, enabling deterministic unit tests
 /// without touching real clipboards or terminal I/O.
+/// 🍳 이 함수는 SSH/WSL/로컬 상황을 보고 어느 복사 경로를 쓸지 최종 결정한다.
 fn copy_to_clipboard_with(
     text: &str,
     ssh_session: bool,
@@ -126,6 +142,7 @@ fn copy_to_clipboard_with(
 }
 
 /// Detect whether the current process is running inside an SSH session.
+/// 🍳 SSH 환경변수가 있는지 보고 지금이 원격 세션인지 판별한다.
 fn is_ssh_session() -> bool {
     std::env::var_os("SSH_TTY").is_some() || std::env::var_os("SSH_CONNECTION").is_some()
 }
@@ -146,6 +163,7 @@ fn is_wsl_session() -> bool {
 /// triggers `os_log` / `NSLog` output on stderr. Because the TUI owns the
 /// terminal, that stray output corrupts the display. We temporarily redirect
 /// fd 2 to `/dev/null` around the call to keep the screen clean.
+/// 🍳 macOS/비-Linux 로컬 클립보드 경로다. stderr 잡음을 잠깐 막고 복사한다.
 #[cfg(all(not(target_os = "android"), not(target_os = "linux")))]
 fn arboard_copy(text: &str) -> Result<Option<ClipboardLease>, String> {
     #[cfg(target_os = "macos")]
@@ -167,6 +185,7 @@ fn arboard_copy(text: &str) -> Result<Option<ClipboardLease>, String> {
 /// On Linux/X11 and some Wayland setups, clipboard contents are served by the
 /// process that last wrote them. Keep the `Clipboard` alive so the copied text
 /// remains pasteable while the TUI is running.
+/// 🍳 Linux 로컬 클립보드는 lease를 함께 돌려줘 내용이 사라지지 않게 한다.
 #[cfg(target_os = "linux")]
 fn arboard_copy(text: &str) -> Result<Option<ClipboardLease>, String> {
     let _guard = SuppressStderr::new();
@@ -184,6 +203,7 @@ fn arboard_copy(_text: &str) -> Result<Option<ClipboardLease>, String> {
 }
 
 /// Copy text into the Windows clipboard from a WSL process.
+/// 🍳 WSL 안에서는 PowerShell을 호출해 윈도우 클립보드로 복사한다.
 #[cfg(target_os = "linux")]
 fn wsl_clipboard_copy(text: &str) -> Result<(), String> {
     let mut child = std::process::Command::new("powershell.exe")
