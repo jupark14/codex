@@ -1,3 +1,16 @@
+//! 📄 이 모듈이 하는 일:
+//!   실행 중 생길 수 있는 여러 에러를 한곳에 모아 사람이 읽을 메시지와 프로토콜용 분류로 바꿔 준다.
+//!   비유로 말하면 사고가 났을 때 "무슨 사고인지", "다시 시도해도 되는지", "바깥 손님에겐 뭐라고 설명할지"를 적는 상황실 매뉴얼이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/core`
+//!   - `codex-rs/protocol/src/lib.rs`
+//!   - 에러를 UI/네트워크 응답으로 바꾸는 코드
+//!
+//! 🧩 핵심 개념:
+//!   - `CodexErr` = 대표 에러 묶음
+//!   - `Display` 구현 = 내부 에러를 사람이 읽는 문장으로 바꾸는 번역기
+
 use crate::ThreadId;
 use crate::auth::KnownPlan;
 use crate::auth::PlanType;
@@ -26,8 +39,10 @@ use tokio::task::JoinError;
 pub type Result<T> = std::result::Result<T, CodexErr>;
 
 /// Limit UI error messages to a reasonable size while keeping useful context.
+/// 🍳 이 숫자는 UI 에러 말풍선이 너무 길어져 화면을 다 가리지 않게 하는 최대 길이 울타리다.
 const ERROR_MESSAGE_UI_MAX_BYTES: usize = 2 * 1024;
 
+/// 🍳 이 enum은 샌드박스 안에서 난 사고 종류를 분류한 사고 표지판이다.
 #[derive(Error, Debug)]
 pub enum SandboxErr {
     /// Error from sandbox execution
@@ -63,6 +78,8 @@ pub enum SandboxErr {
     LandlockRestrict,
 }
 
+/// 🍳 이 enum은 Codex 전체가 공통으로 쓰는 대표 에러 상자다.
+///   네트워크/샌드박스/입력 오류 같은 여러 사고를 한 타입으로 묶어 다룬다.
 #[derive(Error, Debug)]
 pub enum CodexErr {
     #[error("turn aborted. Something went wrong? Hit `/feedback` to report the issue.")]
@@ -165,6 +182,7 @@ impl From<CancelErr> for CodexErr {
 }
 
 impl CodexErr {
+    /// 🍳 이 함수는 이 에러가 "나중에 한 번 더 시도해 볼 만한 종류"인지 판별한다.
     pub fn is_retryable(&self) -> bool {
         match self {
             CodexErr::TurnAborted
@@ -205,11 +223,13 @@ impl CodexErr {
     /// Minimal shim so that existing `e.downcast_ref::<CodexErr>()` checks continue to compile
     /// after replacing `anyhow::Error` in the return signature. This mirrors the behavior of
     /// `anyhow::Error::downcast_ref` but works directly on our concrete enum.
+    /// 🍳 이 함수는 구체 에러 상자 안에서 원하는 타입이 숨어 있는지 다시 들여다보는 돋보기다.
     pub fn downcast_ref<T: std::any::Any>(&self) -> Option<&T> {
         (self as &dyn std::any::Any).downcast_ref::<T>()
     }
 
     /// Translate core error to client-facing protocol error.
+    /// 🍳 이 함수는 내부 에러를 프로토콜 표준 에러 분류표로 번역한다.
     pub fn to_codex_protocol_error(&self) -> CodexErrorInfo {
         match self {
             CodexErr::ContextWindowExceeded => CodexErrorInfo::ContextWindowExceeded,
@@ -250,6 +270,7 @@ impl CodexErr {
         }
     }
 
+    /// 🍳 이 함수는 HTTP 상태 코드가 있으면 숫자만 뽑아 UI/프로토콜이 재사용하게 한다.
     pub fn http_status_code_value(&self) -> Option<u16> {
         let http_status_code = match self {
             CodexErr::RetryLimit(err) => Some(err.status),
@@ -262,6 +283,7 @@ impl CodexErr {
     }
 }
 
+/// 🍳 이 구조체는 "서버에 닿기도 전에 연결이 실패했다"는 사실을 감싼 포장지다.
 #[derive(Debug)]
 pub struct ConnectionFailedError {
     pub source: reqwest::Error,
@@ -273,6 +295,7 @@ impl std::fmt::Display for ConnectionFailedError {
     }
 }
 
+/// 🍳 이 구조체는 연결은 됐지만 응답 스트림을 읽다가 중간에 끊긴 사고를 적는다.
 #[derive(Debug)]
 pub struct ResponseStreamFailed {
     pub source: reqwest::Error,
@@ -293,6 +316,8 @@ impl std::fmt::Display for ResponseStreamFailed {
     }
 }
 
+/// 🍳 이 구조체는 기대와 다른 HTTP 응답이 왔을 때
+///   상태코드/본문/추가 식별자를 함께 들고 있는 기록 카드다.
 #[derive(Debug)]
 pub struct UnexpectedResponseError {
     pub status: StatusCode,
@@ -309,6 +334,7 @@ const CLOUDFLARE_BLOCKED_MESSAGE: &str =
 const UNEXPECTED_RESPONSE_BODY_MAX_BYTES: usize = 1000;
 
 impl UnexpectedResponseError {
+    /// 🍳 이 함수는 응답 본문에서 사람에게 보여 줄 핵심 문장만 골라 만든다.
     fn display_body(&self) -> String {
         if let Some(message) = self.extract_error_message() {
             return message;
@@ -322,6 +348,7 @@ impl UnexpectedResponseError {
         truncate_with_ellipsis(trimmed_body, UNEXPECTED_RESPONSE_BODY_MAX_BYTES)
     }
 
+    /// 🍳 이 함수는 JSON body 안의 `error.message`를 찾아 에러 핵심 문구만 꺼낸다.
     fn extract_error_message(&self) -> Option<String> {
         let json = serde_json::from_str::<serde_json::Value>(&self.body).ok()?;
         let message = json
@@ -336,6 +363,8 @@ impl UnexpectedResponseError {
         }
     }
 
+    /// 🍳 이 함수는 Cloudflare 차단처럼 자주 헷갈리는 403을
+    ///   조금 더 친절한 안내 문장으로 바꿀 수 있는지 확인한다.
     fn friendly_message(&self) -> Option<String> {
         if self.status != StatusCode::FORBIDDEN {
             return None;
@@ -397,6 +426,7 @@ impl std::fmt::Display for UnexpectedResponseError {
 
 impl std::error::Error for UnexpectedResponseError {}
 
+/// 🍳 이 함수는 너무 긴 문장을 앞/뒤 핵심만 남기고 줄이는 가위다.
 fn truncate_with_ellipsis(text: &str, max_bytes: usize) -> String {
     if text.len() <= max_bytes {
         return text.to_string();
@@ -411,6 +441,7 @@ fn truncate_with_ellipsis(text: &str, max_bytes: usize) -> String {
     truncated
 }
 
+/// 🍳 이 함수는 byte 기준 또는 token 기준 정책에 맞춰 긴 글을 줄인다.
 fn truncate_text(content: &str, policy: TruncationPolicy) -> String {
     match policy {
         TruncationPolicy::Bytes(bytes) => truncate_middle_chars(content, bytes),
@@ -418,6 +449,7 @@ fn truncate_text(content: &str, policy: TruncationPolicy) -> String {
     }
 }
 
+/// 🍳 이 구조체는 재시도 횟수를 다 써 버렸다는 사실을 담는 경고판이다.
 #[derive(Debug)]
 pub struct RetryLimitReachedError {
     pub status: StatusCode,
@@ -438,6 +470,8 @@ impl std::fmt::Display for RetryLimitReachedError {
     }
 }
 
+/// 🍳 이 구조체는 사용량 한도 초과 상황에서
+///   어떤 플랜인지, 언제 풀리는지, 추가 안내가 뭔지 함께 들고 다닌다.
 #[derive(Debug)]
 pub struct UsageLimitReachedError {
     pub plan_type: Option<PlanType>,
@@ -512,6 +546,7 @@ impl std::fmt::Display for UsageLimitReachedError {
     }
 }
 
+/// 🍳 이 함수는 "언제 다시 시도하면 되는지" 꼬리 문장을 만든다.
 fn retry_suffix(resets_at: Option<&DateTime<Utc>>) -> String {
     if let Some(resets_at) = resets_at {
         let formatted = format_retry_timestamp(resets_at);
@@ -521,6 +556,7 @@ fn retry_suffix(resets_at: Option<&DateTime<Utc>>) -> String {
     }
 }
 
+/// 🍳 이 함수는 기존 안내 뒤에 "또는 몇 시에 다시 시도" 문장을 붙이는 버전이다.
 fn retry_suffix_after_or(resets_at: Option<&DateTime<Utc>>) -> String {
     if let Some(resets_at) = resets_at {
         let formatted = format_retry_timestamp(resets_at);
@@ -530,6 +566,7 @@ fn retry_suffix_after_or(resets_at: Option<&DateTime<Utc>>) -> String {
     }
 }
 
+/// 🍳 이 함수는 UTC 시간을 로컬 사람이 읽기 쉬운 시각 문자열로 바꾼다.
 fn format_retry_timestamp(resets_at: &DateTime<Utc>) -> String {
     let local_reset = resets_at.with_timezone(&Local);
     let local_now = now_for_retry().with_timezone(&Local);
@@ -543,6 +580,7 @@ fn format_retry_timestamp(resets_at: &DateTime<Utc>) -> String {
     }
 }
 
+/// 🍳 이 함수는 날짜 숫자 뒤에 붙는 `st/nd/rd/th` 꼬리표를 골라 준다.
 fn day_suffix(day: u32) -> &'static str {
     match day {
         11..=13 => "th",
@@ -571,6 +609,7 @@ fn now_for_retry() -> DateTime<Utc> {
     Utc::now()
 }
 
+/// 🍳 이 구조체는 빠진 환경변수 이름과 해결 힌트를 담는 안내문이다.
 #[derive(Debug)]
 pub struct EnvVarError {
     /// Name of the environment variable that is missing.
@@ -590,9 +629,12 @@ impl std::fmt::Display for EnvVarError {
     }
 }
 
+/// 🍳 이 함수는 내부 에러를 UI 말풍선에 넣기 좋은 길이와 표현으로 다듬는다.
 pub fn get_error_message_ui(e: &CodexErr) -> String {
     let message = match e {
         CodexErr::Sandbox(SandboxErr::Denied { output, .. }) => {
+            // 📦 샌드박스 거부는 보통 실제 명령 출력이 제일 도움이 되어서,
+            //    aggregated output이 있으면 그걸 우선 보여 준다.
             let aggregated = output.aggregated_output.text.trim();
             if !aggregated.is_empty() {
                 output.aggregated_output.text.clone()
