@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   exec 세션에서 받은 알림을 기계가 읽기 쉬운 JSONL 이벤트 줄로 바꿔 내보낸다.
+//!   비유로 말하면 경기 기록원이 장면마다 표준 양식 카드로 적어서 방송국에 넘기는 역할이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/exec/src/lib.rs`
+//!   - `codex-rs/exec/src/exec_events.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - JSONL = 한 줄에 사건 하나씩 적는 사건 일지 형식
+//!   - raw item id ↔ exec item id = 원본 앱 서버 카드 번호를 exec 전용 번호표로 바꿔 붙이는 표
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
@@ -55,6 +67,8 @@ use crate::exec_events::TurnStartedEvent;
 use crate::exec_events::Usage;
 use crate::exec_events::WebSearchItem;
 
+/// 🍳 이 구조체는 서버 알림을 JSONL 이벤트로 갈아 끼우는 기록원이다.
+///   `ServerNotification` → `ThreadEvent` 줄들 + 종료 상태
 pub struct EventProcessorWithJsonOutput {
     last_message_path: Option<PathBuf>,
     next_item_id: AtomicU64,
@@ -66,12 +80,16 @@ pub struct EventProcessorWithJsonOutput {
     emit_final_message_on_shutdown: bool,
 }
 
+/// 🍳 이 구조체는 아직 끝나지 않은 todo 목록 진행판을 잠깐 들고 있는 메모장이다.
+///   진행 중인 todo item id + 단계 목록 → 다음 알림까지 보관
 #[derive(Debug, Clone)]
 struct RunningTodoList {
     item_id: String,
     items: Vec<TodoItem>,
 }
 
+/// 🍳 이 구조체는 한 알림을 처리하고 모은 결과 꾸러미다.
+///   생성된 이벤트들 + 계속 실행할지 여부
 #[derive(Debug, PartialEq)]
 pub struct CollectedThreadEvents {
     pub events: Vec<ThreadEvent>,
@@ -79,6 +97,8 @@ pub struct CollectedThreadEvents {
 }
 
 impl EventProcessorWithJsonOutput {
+    /// 🍳 이 함수는 빈 사건 일지와 번호표 기계를 준비해 JSON 출력기를 만든다.
+    ///   마지막 메시지 저장 경로 → 초기화된 processor
     pub fn new(last_message_path: Option<PathBuf>) -> Self {
         Self {
             last_message_path,
@@ -92,19 +112,27 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 지금까지 모아 둔 마지막 agent 멘트를 꺼내 보는 창이다.
+    ///   내부 `final_message` → 문자열 참조
     pub fn final_message(&self) -> Option<&str> {
         self.final_message.as_deref()
     }
 
+    /// 🍳 이 함수는 새 사건 카드에 붙일 연속 번호표를 만든다.
+    ///   내부 카운터 → `item_N` 문자열
     fn next_item_id(&self) -> String {
         format!("item_{}", self.next_item_id.fetch_add(1, Ordering::SeqCst))
     }
 
     #[allow(clippy::print_stdout)]
+    /// 🍳 이 함수는 `ThreadEvent` 한 장을 JSON 문자열 한 줄로 바꿔 stdout에 뿌린다.
+    ///   이벤트 객체 → JSONL 1줄
     fn emit(&self, event: ThreadEvent) {
         println!(
             "{}",
             serde_json::to_string(&event).unwrap_or_else(|err| {
+                // 🛟 직렬화가 실패해도 stdout 형식이 완전히 깨지지 않게
+                //    최소한의 에러 이벤트 한 줄로 대신 보낸다.
                 json!({
                     "type": "error",
                     "message": format!("failed to serialize exec json event: {err}"),
@@ -114,6 +142,8 @@ impl EventProcessorWithJsonOutput {
         );
     }
 
+    /// 🍳 이 함수는 최신 누적 토큰 정보에서 turn 요약표를 꺼낸다.
+    ///   마지막 total token usage → exec event용 `Usage`
     fn usage_from_last_total(&self) -> Usage {
         let Some(usage) = self.last_total_token_usage.as_ref() else {
             return Usage::default();
@@ -125,6 +155,8 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 계획 단계 목록을 todo 체크리스트로 바꾼다.
+    ///   turn plan step들 → `TodoItem` 목록
     pub fn map_todo_items(plan: &[codex_app_server_protocol::TurnPlanStep]) -> Vec<TodoItem> {
         plan.iter()
             .map(|step| TodoItem {
@@ -137,6 +169,8 @@ impl EventProcessorWithJsonOutput {
             .collect()
     }
 
+    /// 🍳 이 함수는 원본 `ThreadItem` 하나를 exec 전용 카드 모양으로 변환한다.
+    ///   앱 서버 item + id 생성기 → exec item 또는 생략(None)
     fn map_item_with_id(
         item: ThreadItem,
         make_id: impl FnOnce() -> String,
@@ -301,6 +335,8 @@ impl EventProcessorWithJsonOutput {
                     id: raw_id,
                     query,
                     action: match action {
+                        // 🧭 web search action enum은 wire 형태가 조금 달라도
+                        //    serde round-trip으로 안전하게 맞춰 보고, 실패하면 `Other`로 접는다.
                         Some(action) => serde_json::from_value(
                             serde_json::to_value(action).unwrap_or_else(|_| json!("other")),
                         )
@@ -313,6 +349,8 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 "시작됨" 이벤트용 번호표를 고정해 두는 보관함이다.
+    ///   원본 raw id → exec item id
     fn started_item_id(&mut self, raw_id: &str) -> String {
         if let Some(existing) = self.raw_to_exec_item_id.get(raw_id) {
             return existing.clone();
@@ -323,12 +361,16 @@ impl EventProcessorWithJsonOutput {
         exec_id
     }
 
+    /// 🍳 이 함수는 "완료됨" 이벤트에서 예전 번호표를 회수한다.
+    ///   원본 raw id → 기존 exec item id 또는 새 fallback id
     fn completed_item_id(&mut self, raw_id: &str) -> String {
         self.raw_to_exec_item_id
             .remove(raw_id)
             .unwrap_or_else(|| self.next_item_id())
     }
 
+    /// 🍳 이 함수는 시작 이벤트에서 보여 줄 만한 item만 골라 카드로 만든다.
+    ///   시작된 item → exec 시작 카드 또는 생략
     fn map_started_item(&mut self, item: ThreadItem) -> Option<ExecThreadItem> {
         match item {
             ThreadItem::AgentMessage { .. } | ThreadItem::Reasoning { .. } => None,
@@ -339,6 +381,8 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 완료 이벤트용 item을 만들면서 빈 reasoning은 잡음을 줄이려고 건너뛴다.
+    ///   완료된 item → exec 완료 카드 또는 생략
     fn map_completed_item_mut(&mut self, item: ThreadItem) -> Option<ExecThreadItem> {
         if let ThreadItem::Reasoning { summary, .. } = &item
             && summary.join("\n").trim().is_empty()
@@ -356,6 +400,8 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 시작만 찍히고 완료 카드가 안 나온 item들을 턴 끝에서 정산한다.
+    ///   turn 전체 item 목록 → 보정용 완료 이벤트들
     fn reconcile_unfinished_started_items(
         &mut self,
         turn_items: &[ThreadItem],
@@ -373,6 +419,8 @@ impl EventProcessorWithJsonOutput {
             .collect()
     }
 
+    /// 🍳 이 함수는 턴 끝 카드 더미에서 마지막 핵심 멘트를 찾는다.
+    ///   `ThreadItem` 목록 → 최종 agent/plan 메시지
     fn final_message_from_turn_items(items: &[ThreadItem]) -> Option<String> {
         items
             .iter()
@@ -389,12 +437,16 @@ impl EventProcessorWithJsonOutput {
             })
     }
 
+    /// 🍳 이 함수는 세션 시작 알림을 JSONL 첫 줄 카드로 만든다.
+    ///   세션 설정 이벤트 → `thread.started`
     pub fn thread_started_event(session_configured: &SessionConfiguredEvent) -> ThreadEvent {
         ThreadEvent::ThreadStarted(ThreadStartedEvent {
             thread_id: session_configured.session_id.to_string(),
         })
     }
 
+    /// 🍳 이 함수는 일반 warning을 JSONL 에러 아이템 한 장으로 바꾼다.
+    ///   경고 문자열 → `CollectedThreadEvents`
     pub fn collect_warning(&mut self, message: String) -> CollectedThreadEvents {
         CollectedThreadEvents {
             events: vec![ThreadEvent::ItemCompleted(ItemCompletedEvent {
@@ -407,6 +459,9 @@ impl EventProcessorWithJsonOutput {
         }
     }
 
+    /// 🍳 이 함수는 서버 알림 하나를 받아,
+    ///   필요한 JSONL 이벤트 여러 장으로 펼치고 종료 상태까지 함께 정한다.
+    ///   `ServerNotification` → 이벤트 묶음 + `CodexStatus`
     pub fn collect_thread_events(
         &mut self,
         notification: ServerNotification,
@@ -490,6 +545,8 @@ impl EventProcessorWithJsonOutput {
                 CodexStatus::Running
             }
             ServerNotification::ThreadTokenUsageUpdated(notification) => {
+                // 🧮 토큰 합계는 turn 종료 때 요약표를 만들 재료라서
+                //    최신 값만 계속 기억해 둔다.
                 self.last_total_token_usage = Some(notification.token_usage);
                 CodexStatus::Running
             }
@@ -519,6 +576,8 @@ impl EventProcessorWithJsonOutput {
                         CodexStatus::InitiateShutdown
                     }
                     TurnStatus::Failed => {
+                        // 🛟 turn 자체 에러가 비어 있더라도,
+                        //    직전에 본 치명적 에러나 기본 문구로 빈칸을 메워 JSONL을 완성한다.
                         self.final_message = None;
                         self.emit_final_message_on_shutdown = false;
                         let error = notification
@@ -615,6 +674,7 @@ impl EventProcessor for EventProcessorWithJsonOutput {
         if self.emit_final_message_on_shutdown
             && let Some(path) = self.last_message_path.as_deref()
         {
+            // 💾 JSONL 모드여도 마지막 자연어 답변만 따로 뽑아 쓸 수 있게 파일 저장은 동일하게 유지한다.
             handle_last_message(self.final_message.as_deref(), path);
         }
     }
