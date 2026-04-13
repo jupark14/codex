@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   app-server 쪽 승인/권한 타입을 TUI가 쓰는 core/protocol 타입으로 바꿔 준다.
+//!   비유로 말하면 바깥 양식으로 온 신청서를 우리 학교 행정실 양식으로 다시 옮겨 적는 번역 창구다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - `codex-rs/tui/src/app/app_server_requests.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - conversion helper = 비슷하지만 다른 타입 두 묶음을 연결하는 변환 다리
+//!   - granted profile = 사용자가 허락한 최종 권한 묶음
+
 use codex_app_server_protocol::AdditionalFileSystemPermissions;
 use codex_app_server_protocol::AdditionalNetworkPermissions;
 use codex_app_server_protocol::GrantedPermissionProfile;
@@ -6,6 +18,7 @@ use codex_protocol::protocol::NetworkApprovalContext;
 use codex_protocol::protocol::NetworkApprovalProtocol;
 use codex_protocol::request_permissions::RequestPermissionProfile as CoreRequestPermissionProfile;
 
+/// 🍳 이 함수는 app-server 네트워크 승인 문맥을 core 프로토콜 타입으로 바꾼다.
 pub(crate) fn network_approval_context_to_core(
     value: AppServerNetworkApprovalContext,
 ) -> NetworkApprovalContext {
@@ -28,6 +41,8 @@ pub(crate) fn network_approval_context_to_core(
     }
 }
 
+/// 🍳 이 함수는 TUI가 받은 권한 요청 응답을
+///   app-server가 기대하는 최종 권한 프로필로 바꿔 담는다.
 pub(crate) fn granted_permission_profile_from_request(
     value: CoreRequestPermissionProfile,
 ) -> GrantedPermissionProfile {
