@@ -4,6 +4,18 @@
 //! Up-arrow recall before returning an input result. This module owns the app-level
 //! dispatch step and records the staged entry once the command has been handled, so
 //! slash-command recall follows the same submitted-input rule as ordinary text.
+//!
+//! 📄 이 파일이 하는 일:
+//!   ChatWidget에서 slash 명령을 실제 행동으로 보내고, 로컬 히스토리 기록 타이밍도 맞춘다.
+//!   비유로 말하면 주문 메모를 읽고 실제 부서에 전달한 뒤, "이 주문은 이미 접수됨"이라고 장부에 체크하는 접수 담당자다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/chatwidget.rs`
+//!   - slash command 입력/디스패치 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - staged slash history = composer가 임시로 잡아 둔 slash 명령 기록
+//!   - dispatch = slash 이름을 실제 app 동작으로 연결하는 단계
 
 use super::*;
 
@@ -13,6 +25,7 @@ impl ChatWidget {
     /// The composer stages history before returning `InputResult::Command`; this wrapper commits
     /// that staged entry after dispatch so slash-command recall follows the same "submitted input"
     /// rule as normal text.
+    /// 🍳 인자 없는 slash 명령을 실행하고, 성공 경로에서 히스토리 기록도 확정한다.
     pub(super) fn handle_slash_command_dispatch(&mut self, cmd: SlashCommand) {
         self.dispatch_command(cmd);
         self.bottom_pane.record_pending_slash_command_history();
@@ -23,6 +36,7 @@ impl ChatWidget {
     /// Inline command arguments may later be prepared through the normal submission pipeline, but
     /// local command recall still tracks the original command invocation. Treating this wrapper as
     /// the only input-result entry point avoids double-recording commands with inline args.
+    /// 🍳 인자가 붙은 slash 명령도 실행한 뒤 staged 히스토리를 한 번만 기록한다.
     pub(super) fn handle_slash_command_with_args_dispatch(
         &mut self,
         cmd: SlashCommand,
@@ -34,6 +48,7 @@ impl ChatWidget {
     }
 
     fn apply_plan_slash_command(&mut self) -> bool {
+        // 🗺️ plan 모드는 collaboration 기능이 켜져 있어야만 적용 가능하다.
         if !self.collaboration_modes_enabled() {
             self.add_info_message(
                 "Collaboration modes are disabled.".to_string(),
@@ -53,6 +68,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 실제 slash 명령 이름에 따라 어떤 UI/세션 동작을 실행할지 분기한다.
     pub(super) fn dispatch_command(&mut self, cmd: SlashCommand) {
         if !cmd.available_during_task() && self.bottom_pane.is_task_running() {
             let message = format!(
