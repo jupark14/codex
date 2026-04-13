@@ -2,11 +2,24 @@
 //!
 //! Keeping this logic in a focused submodule makes the additive title/status
 //! behavior easier to review without paging through the rest of `chatwidget.rs`.
+//!
+//! 📄 이 파일이 하는 일:
+//!   ChatWidget의 status line과 terminal title을 한 번의 계산으로 갱신하는 helper를 모아 둔다.
+//!   비유로 말하면 계기판과 창문 제목판에 같은 상태 정보를 한 번 계산해 각각 맞는 형태로 나눠 적어 주는 표시 장치 관리자다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/chatwidget.rs`
+//!   - status line / terminal title 갱신 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - selection snapshot = 어떤 status/title 항목이 켜져 있는지 한 번에 모은 선택표
+//!   - shared state sync = git branch 같은 공통 데이터는 한 번만 계산해 두 surface가 같이 쓰는 최적화
 
 use super::*;
 
 /// Items shown in the terminal title when the user has not configured a
 /// custom selection. Intentionally minimal: spinner + project name.
+/// 🍳 terminal title 기본 구성은 spinner + project 두 칸만 쓴다.
 pub(super) const DEFAULT_TERMINAL_TITLE_ITEMS: [&str; 2] = ["spinner", "project"];
 
 /// Braille-pattern dot-spinner frames for the terminal title animation.
@@ -21,6 +34,7 @@ pub(super) const TERMINAL_TITLE_SPINNER_INTERVAL: Duration = Duration::from_mill
 /// This is intentionally smaller than the full status-header vocabulary. The
 /// title needs short, stable labels, so callers map richer lifecycle events
 /// onto one of these buckets before rendering.
+/// 🍳 이 enum은 제목줄에 넣을 짧은 상태 단어 묶음이다.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) enum TerminalTitleStatusKind {
     Working,
@@ -37,6 +51,7 @@ pub(super) enum TerminalTitleStatusKind {
 /// (notably git branch lookup and invalid-item warnings). This snapshot lets one
 /// refresh pass compute those shared concerns once, then render both surfaces
 /// from the same selection set.
+/// 🍳 이 구조체는 status line과 terminal title이 같이 쓸 선택 결과를 한 번에 담아 둔다.
 struct StatusSurfaceSelections {
     status_line_items: Vec<StatusLineItem>,
     invalid_status_line_items: Vec<String>,
@@ -45,6 +60,7 @@ struct StatusSurfaceSelections {
 }
 
 impl StatusSurfaceSelections {
+    /// 🍳 git branch 조회가 필요한 surface가 하나라도 있는지 확인한다.
     fn uses_git_branch(&self) -> bool {
         self.status_line_items.contains(&StatusLineItem::GitBranch)
             || self
@@ -58,6 +74,7 @@ impl StatusSurfaceSelections {
 /// Terminal-title refreshes can happen very frequently, so the title path avoids
 /// repeatedly walking up the filesystem to rediscover the same project root name
 /// while the working directory is unchanged.
+/// 🍳 이 구조체는 최근 계산한 project root 이름을 cwd와 함께 캐시해 둔다.
 #[derive(Clone, Debug)]
 pub(super) struct CachedProjectRootName {
     pub(super) cwd: PathBuf,
@@ -65,6 +82,7 @@ pub(super) struct CachedProjectRootName {
 }
 
 impl ChatWidget {
+    /// 🍳 현재 config에서 status line/title 항목 선택 결과와 잘못된 항목 목록을 함께 뽑는다.
     fn status_surface_selections(&self) -> StatusSurfaceSelections {
         let (status_line_items, invalid_status_line_items) = self.status_line_items_with_invalids();
         let (terminal_title_items, invalid_terminal_title_items) =
@@ -77,6 +95,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 잘못된 status line 항목이 있으면 경고를 한 번만 띄운다.
     fn warn_invalid_status_line_items_once(&mut self, invalid_items: &[String]) {
         if self.thread_id.is_some()
             && !invalid_items.is_empty()
@@ -98,6 +117,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 잘못된 terminal title 항목도 경고를 한 번만 띄운다.
     fn warn_invalid_terminal_title_items_once(&mut self, invalid_items: &[String]) {
         if self.thread_id.is_some()
             && !invalid_items.is_empty()
@@ -119,6 +139,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 두 surface가 공통으로 쓰는 branch/cache 상태를 한 번 동기화한다.
     fn sync_status_surface_shared_state(&mut self, selections: &StatusSurfaceSelections) {
         if !selections.uses_git_branch() {
             self.status_line_branch = None;
@@ -134,6 +155,7 @@ impl ChatWidget {
         }
     }
 
+    /// 🍳 선택된 status line 항목만 모아 실제 한 줄 status line을 다시 만든다.
     fn refresh_status_line_from_selections(&mut self, selections: &StatusSurfaceSelections) {
         let enabled = !selections.status_line_items.is_empty();
         self.bottom_pane.set_status_line_enabled(enabled);
@@ -162,6 +184,7 @@ impl ChatWidget {
     /// This does not attempt to restore the shell or terminal's previous title;
     /// it only clears the managed title and updates the cache after a successful
     /// OSC write.
+    /// 🍳 Codex가 관리하던 terminal title을 지우고 캐시도 비운다.
     pub(crate) fn clear_managed_terminal_title(&mut self) -> std::io::Result<()> {
         if self.last_terminal_title.is_some() {
             clear_terminal_title()?;
@@ -178,6 +201,7 @@ impl ChatWidget {
     /// the last successfully written title so redundant OSC writes are avoided.
     /// When the `spinner` item is present in an animated running state, this also
     /// schedules the next frame so the spinner keeps advancing.
+    /// 🍳 terminal title 항목 선택표를 보고 실제 제목 문자열을 만들고 적용한다.
     fn refresh_terminal_title_from_selections(&mut self, selections: &StatusSurfaceSelections) {
         if selections.terminal_title_items.is_empty() {
             if let Err(err) = self.clear_managed_terminal_title() {
@@ -245,6 +269,7 @@ impl ChatWidget {
     /// terminal title. It parses both configurations once, emits invalid-item
     /// warnings once, synchronizes shared cached state (such as git-branch
     /// lookup), then renders each surface from that shared snapshot.
+    /// 🍳 status line과 terminal title 둘 다를 한 번의 계산으로 같이 새로고침한다.
     pub(crate) fn refresh_status_surfaces(&mut self) {
         let selections = self.status_surface_selections();
         self.warn_invalid_status_line_items_once(&selections.invalid_status_line_items);
@@ -255,6 +280,7 @@ impl ChatWidget {
     }
 
     /// Recomputes and emits the terminal title from config and runtime state.
+    /// 🍳 terminal title만 단독으로 다시 그릴 때 쓰는 입구다.
     pub(crate) fn refresh_terminal_title(&mut self) {
         let selections = self.status_surface_selections();
         self.warn_invalid_terminal_title_items_once(&selections.invalid_terminal_title_items);
