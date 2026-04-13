@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   `codex exec` 명령줄 옵션을 읽어서 실행 준비 상자로 정리한다.
+//!   비유로 말하면 여행 가기 전에 가방 칸마다 짐을 나눠 담는 안내표다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/exec/src/main.rs`
+//!   - `codex-rs/exec/src/lib.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - `clap` = 사용자가 터미널에 적은 글자를 규칙표대로 해석하는 접수 창구
+//!   - `Args`/`Parser` derive = 어떤 칸에 어떤 값을 담을지 미리 그려 둔 설계도
+
 use clap::Args;
 use clap::FromArgMatches;
 use clap::Parser;
@@ -5,6 +17,9 @@ use clap::ValueEnum;
 use codex_utils_cli::CliConfigOverrides;
 use std::path::PathBuf;
 
+/// 🍳 이 구조체는 여행 체크리스트처럼 `codex exec`의 전체 입력을 한 상자에 모아 둔다.
+///   터미널 인자들 → 실행 설정 묶음
+///   예시: `codex exec -m gpt-5.4 "fix bug"` → `Cli { model: Some(...), prompt: Some(...) }`
 #[derive(Parser, Debug)]
 #[command(
     version,
@@ -114,6 +129,8 @@ pub struct Cli {
     pub prompt: Option<String>,
 }
 
+/// 🍳 이 enum은 갈림길 표지판처럼 큰 실행 흐름을 고른다.
+///   하위 명령 이름 → 어떤 작업으로 들어갈지
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
     /// Resume a previous session by id or pick the most recent with --last.
@@ -123,6 +140,8 @@ pub enum Command {
     Review(ReviewArgs),
 }
 
+/// 🍳 이 구조체는 `resume` 명령의 원본 입력 봉투다.
+///   clap이 읽은 위치 인자/옵션 → 아직 해석 전인 값들
 #[derive(Args, Debug)]
 struct ResumeArgsRaw {
     // Note: This is the direct clap shape. We reinterpret the positional when --last is set
@@ -155,6 +174,8 @@ struct ResumeArgsRaw {
     prompt: Option<String>,
 }
 
+/// 🍳 이 구조체는 `resume` 입력을 사람이 이해하기 쉬운 모양으로 다시 포장한 결과물이다.
+///   `ResumeArgsRaw` → 조건 해석이 끝난 resume 설정
 #[derive(Debug)]
 pub struct ResumeArgs {
     /// Conversation/session id (UUID) or thread name. UUIDs take precedence if it parses.
@@ -176,6 +197,8 @@ pub struct ResumeArgs {
 
 impl From<ResumeArgsRaw> for ResumeArgs {
     fn from(raw: ResumeArgsRaw) -> Self {
+        // 🤔 `--last`를 썼는데 prompt 칸이 비어 있으면,
+        //    위치 인자를 session id가 아니라 "재개 후 보낼 한마디"로 읽는다.
         // When --last is used without an explicit prompt, treat the positional as the prompt
         // (clap can’t express this conditional positional meaning cleanly).
         let (session_id, prompt) = if raw.last && raw.prompt.is_none() {
@@ -209,11 +232,15 @@ impl FromArgMatches for ResumeArgs {
     }
 
     fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
+        // 🔄 기존 상자를 통째로 새로 갈아 끼워서,
+        //    부분만 섞이다가 이전 값이 남는 사고를 막는다.
         *self = ResumeArgsRaw::from_arg_matches(matches).map(Self::from)?;
         Ok(())
     }
 }
 
+/// 🍳 이 구조체는 코드 리뷰 주문서를 적는 폼이다.
+///   리뷰 기준(브랜치/커밋/로컬 변경) + 추가 지시 → 리뷰 실행 입력
 #[derive(Parser, Debug)]
 pub struct ReviewArgs {
     /// Review staged, unstaged, and untracked changes.
@@ -249,6 +276,8 @@ pub struct ReviewArgs {
     pub prompt: Option<String>,
 }
 
+/// 🍳 이 enum은 신호등처럼 색을 언제 켤지 고른다.
+///   환경 상태 → ANSI 색 사용 여부
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "kebab-case")]
 pub enum Color {
