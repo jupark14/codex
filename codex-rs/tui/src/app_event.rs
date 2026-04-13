@@ -7,6 +7,18 @@
 //!
 //! Exit is modelled explicitly via `AppEvent::Exit(ExitMode)` so callers can request shutdown-first
 //! quits without reaching into the app loop or coupling to shutdown/exit sequencing.
+//!
+//! 📄 이 파일이 하는 일:
+//!   TUI 안 여러 위젯과 비동기 작업이 app 루프에 부탁할 일을 이벤트 enum으로 정리한다.
+//!   비유로 말하면 학교 방송실에 보내는 메모를 "새 세션 열기", "브라우저 열기", "플러그인 불러오기" 같은 종류별 양식으로 나눈 사건 게시판이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - bottom pane / picker / background task 결과 처리 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `AppEvent` = app 루프가 처리할 내부 메시지 버스
+//!   - result 이벤트 = 비동기 작업이 끝난 뒤 성공/실패를 다시 app에 보고하는 답장
 
 use std::path::PathBuf;
 
@@ -49,6 +61,7 @@ pub(crate) enum RealtimeAudioDeviceKind {
 }
 
 impl RealtimeAudioDeviceKind {
+    /// 🍳 이 함수는 장치 종류를 UI 제목용 이름표로 바꾼다.
     pub(crate) fn title(self) -> &'static str {
         match self {
             Self::Microphone => "Microphone",
@@ -56,6 +69,7 @@ impl RealtimeAudioDeviceKind {
         }
     }
 
+    /// 🍳 이 함수는 문장 안에 넣기 좋은 일반 명사형 이름을 돌려준다.
     pub(crate) fn noun(self) -> &'static str {
         match self {
             Self::Microphone => "microphone",
@@ -85,6 +99,7 @@ pub(crate) struct ConnectorsSnapshot {
 /// `StatusCommand` is tied to a specific `/status` invocation and must call
 /// `finish_status_rate_limit_refresh` when done so the card stops showing a
 /// "refreshing" state.
+/// 🍳 이 enum은 rate limit 새로고침이 왜 시작됐는지 붙이는 이유표다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RateLimitRefreshOrigin {
     /// Eagerly fetched after bootstrap so the first `/status` already has data.
@@ -94,6 +109,7 @@ pub(crate) enum RateLimitRefreshOrigin {
     StatusCommand { request_id: u64 },
 }
 
+/// 🍳 이 enum은 TUI 전체가 처리할 내부 사건 목록판이다.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub(crate) enum AppEvent {
