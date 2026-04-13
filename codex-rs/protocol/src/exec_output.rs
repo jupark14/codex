@@ -5,6 +5,18 @@
 //! Unicode replacement character. We now lean on `chardetng` and `encoding_rs` so we can
 //! automatically detect and decode the vast majority of legacy encodings before falling back to
 //! lossy UTF-8 decoding.
+//!
+//! 📄 이 파일이 하는 일:
+//!   shell 출력 바이트를 최대한 사람이 읽을 수 있는 문자열로 복원한다.
+//!   비유로 말하면 여러 나라 문자로 적힌 쪽지를 받아 가능한 맞는 해독표를 골라 읽어 주는 번역 돋보기다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/protocol/src/error.rs`
+//!   - shell/exec 출력 텍스트를 다루는 코드
+//!
+//! 🧩 핵심 개념:
+//!   - encoding detection = 이 바이트가 어떤 문자표로 써졌는지 맞히는 탐정 과정
+//!   - fallback = 확신이 부족하면 최소한 깨지지 않는 UTF-8 lossless/lossy 길로 후퇴하는 안전장치
 
 use chardetng::EncodingDetector;
 use encoding_rs::Encoding;
@@ -12,6 +24,7 @@ use encoding_rs::IBM866;
 use encoding_rs::WINDOWS_1252;
 use std::time::Duration;
 
+/// 🍳 이 구조체는 stdout/stderr 한 줄 묶음을 텍스트와 잘림 정보까지 함께 담는 상자다.
 #[derive(Debug, Clone)]
 pub struct StreamOutput<T: Clone> {
     pub text: T,
@@ -19,6 +32,7 @@ pub struct StreamOutput<T: Clone> {
 }
 
 impl StreamOutput<String> {
+    /// 🍳 이 함수는 이미 문자열인 출력을 "안 잘린 새 상자"로 감싼다.
     pub fn new(text: String) -> Self {
         Self {
             text,
@@ -28,6 +42,7 @@ impl StreamOutput<String> {
 }
 
 impl StreamOutput<Vec<u8>> {
+    /// 🍳 이 함수는 바이트 출력 상자를 사람이 읽는 문자열 상자로 바꾼다.
     pub fn from_utf8_lossy(&self) -> StreamOutput<String> {
         StreamOutput {
             text: bytes_to_string_smart(&self.text),
@@ -36,6 +51,7 @@ impl StreamOutput<Vec<u8>> {
     }
 }
 
+/// 🍳 이 구조체는 명령 실행 한 번의 최종 결과 영수증이다.
 #[derive(Clone, Debug)]
 pub struct ExecToolCallOutput {
     pub exit_code: i32,
@@ -60,6 +76,7 @@ impl Default for ExecToolCallOutput {
 }
 
 /// Attempts to convert arbitrary bytes to UTF-8 with best-effort encoding detection.
+/// 🍳 이 함수는 바이트 묶음을 가능한 알맞은 문자표로 해독해 문자열로 만든다.
 pub fn bytes_to_string_smart(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         return String::new();
@@ -94,6 +111,7 @@ const WINDOWS_1252_PUNCT_BYTES: [u8; 8] = [
     0x99, // ™ (trade mark sign)
 ];
 
+/// 🍳 이 함수는 바이트를 보고 가장 그럴듯한 문자표를 고른다.
 fn detect_encoding(bytes: &[u8]) -> &'static Encoding {
     let mut detector = EncodingDetector::new();
     detector.feed(bytes, true);
@@ -115,6 +133,8 @@ fn detect_encoding(bytes: &[u8]) -> &'static Encoding {
     encoding
 }
 
+/// 🍳 이 함수는 고른 문자표로 실제 문자열 해독을 시도하고,
+///   깨짐이 심하면 UTF-8 lossy 경로로 물러난다.
 fn decode_bytes(bytes: &[u8], encoding: &'static Encoding) -> String {
     let (decoded, _, had_errors) = encoding.decode(bytes);
 
@@ -160,6 +180,7 @@ fn looks_like_windows_1252_punctuation(bytes: &[u8]) -> bool {
     saw_extended_punctuation && saw_ascii_word
 }
 
+/// 🍳 이 함수는 문제 되는 바이트가 "Windows-1252 스마트 문장부호 허용 목록"인지 확인한다.
 fn is_windows_1252_punct(byte: u8) -> bool {
     WINDOWS_1252_PUNCT_BYTES.contains(&byte)
 }
