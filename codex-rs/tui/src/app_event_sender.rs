@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   여러 UI 요소가 `AppEvent`를 안전하게 app 루프 채널로 보내도록 도와주는 얇은 송신기다.
+//!   비유로 말하면 교실에서 나온 요청 메모를 방송실 우편함에 넣어 주는 심부름꾼이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui`
+//!   - 버튼/위젯/overlay가 app 이벤트를 보낼 때
+//!
+//! 🧩 핵심 개념:
+//!   - sender wrapper = 채널 송신기를 편한 helper 함수 묶음으로 감싼 것
+//!   - `session_log` = 재생용 로그를 남길 때 `CodexOp`와 일반 UI 이벤트를 구분하는 기록장
+
 use std::path::PathBuf;
 
 use crate::app_command::AppCommand;
@@ -14,18 +26,21 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::app_event::AppEvent;
 use crate::session_log;
 
+/// 🍳 이 구조체는 app 이벤트 채널 송신기를 손에 쥔 심부름꾼이다.
 #[derive(Clone, Debug)]
 pub(crate) struct AppEventSender {
     pub app_event_tx: UnboundedSender<AppEvent>,
 }
 
 impl AppEventSender {
+    /// 🍳 이 함수는 채널 송신기를 감싸 새 helper 묶음을 만든다.
     pub(crate) fn new(app_event_tx: UnboundedSender<AppEvent>) -> Self {
         Self { app_event_tx }
     }
 
     /// Send an event to the app event channel. If it fails, we swallow the
     /// error and log it.
+    /// 🍳 이 함수는 이벤트를 채널로 보내고, 실패하면 앱을 죽이지 않고 로그만 남긴다.
     pub(crate) fn send(&self, event: AppEvent) {
         // Record inbound events for high-fidelity session replay.
         // Avoid double-logging Ops; those are logged at the point of submission.
@@ -37,6 +52,7 @@ impl AppEventSender {
         }
     }
 
+    /// 🍳 아래 helper들은 자주 쓰는 행동을 `AppEvent`/`AppCommand` 조합으로 빠르게 포장하는 단축 버튼들이다.
     pub(crate) fn interrupt(&self) {
         self.send(AppEvent::CodexOp(AppCommand::interrupt().into_core()));
     }
