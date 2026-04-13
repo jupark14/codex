@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   사용자가 피드백 메모를 적고 제출할 수 있는 bottom-pane 입력 뷰를 제공한다.
+//!   비유로 말하면 "버그 신고/좋았던 점" 메모를 적어 넣는 의견함 작성 창구다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - 피드백 업로드 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `FeedbackAudience` = 업로드 후 어떤 안내 링크를 보여 줄지 정하는 대상 구분
+//!   - `FeedbackNoteView` = 실제 메모 입력칸과 제출 동작을 가진 뷰
+
 use codex_feedback::FEEDBACK_DIAGNOSTICS_ATTACHMENT_FILENAME;
 use codex_feedback::FeedbackDiagnostics;
 use crossterm::event::KeyCode;
@@ -35,6 +47,7 @@ const CODEX_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
 ///
 /// This is used strictly for messaging/links after feedback upload completes. It
 /// must not change feedback upload behavior itself.
+/// 🍳 이 enum은 피드백 제출 뒤 어떤 후속 안내문을 보여 줄지 고르는 대상표다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FeedbackAudience {
     OpenAiEmployee,
@@ -43,6 +56,7 @@ pub(crate) enum FeedbackAudience {
 
 /// Minimal input overlay to collect an optional feedback note, then submit it
 /// through the app-server-managed feedback flow.
+/// 🍳 이 구조체는 피드백 한 줄 메모를 적고 제출하는 간단 입력창이다.
 pub(crate) struct FeedbackNoteView {
     category: FeedbackCategory,
     turn_id: Option<String>,
@@ -56,6 +70,7 @@ pub(crate) struct FeedbackNoteView {
 }
 
 impl FeedbackNoteView {
+    /// 🍳 이 함수는 피드백 메모 입력창을 초기 상태로 만든다.
     pub(crate) fn new(
         category: FeedbackCategory,
         turn_id: Option<String>,
@@ -73,6 +88,7 @@ impl FeedbackNoteView {
         }
     }
 
+    /// 🍳 이 함수는 현재 textarea 내용을 읽어 피드백 제출 이벤트로 바꿔 보낸다.
     fn submit(&mut self) {
         let note = self.textarea.text().trim().to_string();
         let reason = if note.is_empty() { None } else { Some(note) };
@@ -126,6 +142,7 @@ impl BottomPaneView for FeedbackNoteView {
         if pasted.is_empty() {
             return false;
         }
+        // 📋 붙여넣기 텍스트도 그냥 메모 본문 일부로 바로 넣는다.
         self.textarea.insert_str(&pasted);
         true
     }
