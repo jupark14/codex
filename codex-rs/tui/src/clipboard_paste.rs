@@ -1,7 +1,20 @@
+//! 📄 이 파일이 하는 일:
+//!   클립보드에서 이미지나 경로를 읽어 TUI가 붙여넣기 쉬운 형태로 바꾼다.
+//!   비유로 말하면 클립보드에 든 그림을 임시 PNG 파일로 꺼내거나, 윈도우 길을 WSL 길로 번역해 주는 붙여넣기 변환기다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui`
+//!   - 이미지 붙여넣기 / 파일 경로 정규화 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `PastedImageInfo` = 붙여넣은 이미지의 크기와 포맷 라벨
+//!   - WSL fallback = 기본 경로가 실패할 때 윈도우 PowerShell로 우회하는 대체 통로
+
 use std::path::Path;
 use std::path::PathBuf;
 use tempfile::Builder;
 
+/// 🍳 이 enum은 이미지 붙여넣기 실패 이유를 큰 분류표로 나눈다.
 #[derive(Debug, Clone)]
 pub enum PasteImageError {
     ClipboardUnavailable(String),
@@ -22,6 +35,7 @@ impl std::fmt::Display for PasteImageError {
 }
 impl std::error::Error for PasteImageError {}
 
+/// 🍳 이 enum은 붙여넣은 이미지가 어떤 인코딩 포맷인지 보여 주는 라벨이다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncodedImageFormat {
     Png,
@@ -30,6 +44,7 @@ pub enum EncodedImageFormat {
 }
 
 impl EncodedImageFormat {
+    /// 🍳 포맷 enum을 짧은 표시용 문자열로 바꾼다.
     pub fn label(self) -> &'static str {
         match self {
             EncodedImageFormat::Png => "PNG",
@@ -39,6 +54,7 @@ impl EncodedImageFormat {
     }
 }
 
+/// 🍳 붙여넣은 이미지의 핵심 메타데이터를 담는 카드다.
 #[derive(Debug, Clone)]
 pub struct PastedImageInfo {
     pub width: u32,
@@ -47,6 +63,7 @@ pub struct PastedImageInfo {
 }
 
 /// Capture image from system clipboard, encode to PNG, and return bytes + info.
+/// 🍳 클립보드 이미지를 읽어 PNG 바이트와 메타정보를 함께 돌려준다.
 #[cfg(not(target_os = "android"))]
 pub fn paste_image_as_png() -> Result<(Vec<u8>, PastedImageInfo), PasteImageError> {
     let _span = tracing::debug_span!("paste_image_as_png").entered();
@@ -117,6 +134,7 @@ pub fn paste_image_as_png() -> Result<(Vec<u8>, PastedImageInfo), PasteImageErro
 }
 
 /// Convenience: write to a temp file and return its path + info.
+/// 🍳 붙여넣은 이미지를 임시 PNG 파일로 저장하고 그 경로를 돌려준다.
 #[cfg(not(target_os = "android"))]
 pub fn paste_image_to_temp_png() -> Result<(PathBuf, PastedImageInfo), PasteImageError> {
     // First attempt: read image from system clipboard via arboard (native paths or image data).
@@ -155,6 +173,7 @@ pub fn paste_image_to_temp_png() -> Result<(PathBuf, PastedImageInfo), PasteImag
 /// the Windows clipboard), attempt a WSL fallback that calls PowerShell on the
 /// Windows side to write the clipboard image to a temporary file, then return
 /// the corresponding WSL path.
+/// 🍳 WSL에서 기본 붙여넣기가 실패했을 때 윈도우 클립보드 우회 경로를 시도한다.
 #[cfg(target_os = "linux")]
 fn try_wsl_clipboard_fallback(
     error: &PasteImageError,
@@ -195,6 +214,7 @@ fn try_wsl_clipboard_fallback(
 /// Try to call a Windows PowerShell command (several common names) to save the
 /// clipboard image to a temporary PNG and return the Windows path to that file.
 /// Returns None if no command succeeded or no image was present.
+/// 🍳 PowerShell을 이용해 윈도우 클립보드 이미지를 파일로 덤프해 본다.
 #[cfg(target_os = "linux")]
 fn try_dump_windows_clipboard_image() -> Option<String> {
     // Powershell script: save image from clipboard to a temp png and print the path.
@@ -242,6 +262,7 @@ pub fn paste_image_to_temp_png() -> Result<(PathBuf, PastedImageInfo), PasteImag
 /// - `file://` URLs (converted to local paths)
 /// - Windows/UNC paths
 /// - shell-escaped single paths (via `shlex`)
+/// 🍳 붙여넣은 문자열이 파일 경로처럼 보이면 로컬 `PathBuf`로 정규화한다.
 pub fn normalize_pasted_path(pasted: &str) -> Option<PathBuf> {
     let pasted = pasted.trim();
     let unquoted = pasted
