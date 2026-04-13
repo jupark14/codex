@@ -13,6 +13,18 @@
 //! The walk starts from `primary_thread_id` and repeatedly follows
 //! `SessionSource::SubAgent(ThreadSpawn { parent_thread_id, .. })` edges until no new children are
 //! found. The primary thread itself is never included in the output.
+//!
+//! 📄 이 파일이 하는 일:
+//!   앱 서버가 준 "현재 로드된 thread 목록"에서 메인 thread에 딸린 subagent들만 골라낸다.
+//!   비유로 말하면 학교 전체 명단에서 "이 반에서 파생된 조별 활동 팀"만 찾아 추려내는 출석 필터다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - multi-agent picker 초기화 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - spawn tree = 부모 thread에서 자식 thread로 이어지는 가족 나무
+//!   - breadth-first walk = 부모부터 차례대로 자식들을 따라가는 탐색 방식
 
 use codex_app_server_protocol::SessionSource;
 use codex_app_server_protocol::Thread;
@@ -23,6 +35,7 @@ use std::collections::HashSet;
 
 /// A subagent thread discovered by the spawn-tree walk, carrying just enough metadata for the
 /// TUI to register it in the navigation cache and rendering metadata map.
+/// 🍳 이 구조체는 picker 등록에 필요한 subagent 최소 정보만 담는 카드다.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoadedSubagentThread {
     pub(crate) thread_id: ThreadId,
@@ -43,6 +56,7 @@ pub(crate) struct LoadedSubagentThread {
 /// If two threads claim the same parent, both are included. Cycles in the parent chain are not
 /// possible because `ThreadId`s are server-assigned UUIDs and the server enforces acyclicity, but
 /// the `included` set guards against re-visiting regardless.
+/// 🍳 이 함수는 메인 thread를 뿌리로 삼아 자식/손자 thread만 골라 반환한다.
 pub(crate) fn find_loaded_subagent_threads_for_primary(
     threads: Vec<Thread>,
     primary_thread_id: ThreadId,
@@ -52,6 +66,7 @@ pub(crate) fn find_loaded_subagent_threads_for_primary(
         let Ok(thread_id) = ThreadId::from_string(&thread.id) else {
             continue;
         };
+        // 🗂️ 먼저 id 기준 사전으로 바꿔 둬야 부모-자식 탐색 중 원하는 thread를 빨리 찾을 수 있다.
         threads_by_id.insert(thread_id, thread);
     }
 
@@ -75,6 +90,8 @@ pub(crate) fn find_loaded_subagent_threads_for_primary(
                 continue;
             }
 
+            // 🌳 부모가 맞는 thread를 찾으면 결과 집합에 넣고,
+            //    그 thread도 다시 자식을 찾을 수 있게 pending에 넣는다.
             included.insert(*thread_id);
             pending.push(*thread_id);
         }
