@@ -16,6 +16,18 @@
 //! - Usage limits (5-hour, weekly)
 //! - Session info (thread title, ID, tokens used)
 //! - Application version
+//!
+//! 📄 이 파일이 하는 일:
+//!   TUI status line에 어떤 항목을 보여 줄지 고르고 순서를 바꾸는 설정 popup을 제공한다.
+//!   비유로 말하면 자동차 계기판에 속도계, 연료계, 시계 중 무엇을 앞에 둘지 고르는 대시보드 편집기다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - status line 설정 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `StatusLineItem` = 계기판에 올릴 수 있는 정보 조각 하나
+//!   - preview data = 지금 선택 상태를 실제 한 줄로 미리 보여 주는 샘플 문자열
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -45,6 +57,7 @@ use crate::render::renderable::Renderable;
 /// - Git-related items only show when in a git repository
 /// - Context/limit items only show when data is available from the API
 /// - Session ID only shows after a session has started
+/// 🍳 이 enum은 status line에 올릴 수 있는 정보 항목 종류표다.
 #[derive(EnumIter, EnumString, Display, Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 #[strum(serialize_all = "kebab_case")]
 pub(crate) enum StatusLineItem {
@@ -105,6 +118,7 @@ pub(crate) enum StatusLineItem {
 
 impl StatusLineItem {
     /// User-visible description shown in the popup.
+    /// 🍳 각 status 항목을 사람이 이해하기 쉬운 설명문으로 바꾼다.
     pub(crate) fn description(&self) -> &'static str {
         match self {
             StatusLineItem::ModelName => "Current model name",
@@ -141,12 +155,14 @@ impl StatusLineItem {
 }
 
 /// Runtime values used to preview the current status-line selection.
+/// 🍳 이 구조체는 현재 설정으로 어떤 문장이 보일지 미리보기 값을 담는다.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct StatusLinePreviewData {
     values: BTreeMap<StatusLineItem, String>,
 }
 
 impl StatusLinePreviewData {
+    /// 🍳 (항목, 값) 쌍 묶음을 preview 데이터 상자로 모은다.
     pub(crate) fn from_iter<I>(values: I) -> Self
     where
         I: IntoIterator<Item = (StatusLineItem, String)>,
@@ -156,6 +172,7 @@ impl StatusLinePreviewData {
         }
     }
 
+    /// 🍳 현재 선택된 항목 순서대로 실제 preview 한 줄을 만든다.
     fn line_for_items(&self, items: &[MultiSelectItem]) -> Option<Line<'static>> {
         let preview = items
             .iter()
@@ -179,6 +196,7 @@ impl StatusLinePreviewData {
 /// - Shows a live preview of the configured status line
 /// - Emits [`AppEvent::StatusLineSetup`] on confirmation
 /// - Emits [`AppEvent::StatusLineSetupCancelled`] on cancellation
+/// 🍳 이 구조체는 MultiSelectPicker를 감싸 status line 전용 동작을 덧씌운 뷰다.
 pub(crate) struct StatusLineSetupView {
     /// The underlying multi-select picker widget.
     picker: MultiSelectPicker,
@@ -195,6 +213,7 @@ impl StatusLineSetupView {
     ///
     /// Items from `status_line_items` are shown first (in order) and marked as
     /// enabled. Remaining items are appended and marked as disabled.
+    /// 🍳 이 함수는 현재 설정과 preview 데이터를 받아 status line 설정창을 만든다.
     pub(crate) fn new(
         status_line_items: Option<&[String]>,
         preview_data: StatusLinePreviewData,
