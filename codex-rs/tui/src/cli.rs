@@ -1,9 +1,22 @@
+//! 📄 이 파일이 하는 일:
+//!   TUI 실행용 `codex` CLI 인자 구조를 정의한다.
+//!   비유로 말하면 터미널 앱을 켤 때 들고 들어올 옵션 체크리스트를 항목별로 나눠 적어 둔 입장 카드다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui`
+//!   - top-level CLI wrapper / resume/fork 진입 경로
+//!
+//! 🧩 핵심 개념:
+//!   - public flag = 사용자가 직접 입력하는 옵션
+//!   - internal control = 상위 래퍼 명령이 채워 넣는 숨은 전달값
+
 use clap::Parser;
 use clap::ValueHint;
 use codex_utils_cli::ApprovalModeCliArg;
 use codex_utils_cli::CliConfigOverrides;
 use std::path::PathBuf;
 
+/// 🍳 이 구조체는 TUI 시작에 필요한 모든 CLI 옵션을 한 상자에 담는다.
 #[derive(Parser, Debug)]
 #[command(version)]
 pub struct Cli {
