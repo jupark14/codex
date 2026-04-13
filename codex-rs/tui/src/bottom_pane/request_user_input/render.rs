@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   request-user-input 오버레이를 실제 ratatui 위젯과 줄들로 그리는 렌더링 보조 함수를 담는다.
+//!   비유로 말하면 설문지를 화면에 예쁘게 인쇄하면서 제목, 선택지, 확인창을 각 칸에 맞춰 칠해 주는 출력 담당자다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/request_user_input/mod.rs`
+//!   - 같은 폴더의 `layout.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - unanswered confirmation = 답 안 한 질문이 있을 때 마지막으로 한 번 더 묻는 확인창
+//!   - `Renderable` 구현 = 오버레이 전체를 높이 계산/실제 그리기 규약에 맞춰 내보내는 창구
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -36,6 +48,7 @@ struct UnansweredConfirmationData {
     state: ScrollState,
 }
 
+/// 🍳 확인창 렌더링용으로 줄과 행을 미리 정리한 묶음이다.
 struct UnansweredConfirmationLayout {
     header_lines: Vec<Line<'static>>,
     hint_lines: Vec<Line<'static>>,
@@ -43,6 +56,7 @@ struct UnansweredConfirmationLayout {
     state: ScrollState,
 }
 
+/// 🍳 borrowed line을 `'static` 소유 line으로 복사해 렌더링에 안전하게 넘긴다.
 fn line_to_owned(line: Line<'_>) -> Line<'static> {
     Line {
         style: line.style,
@@ -59,6 +73,7 @@ fn line_to_owned(line: Line<'_>) -> Line<'static> {
 }
 
 impl Renderable for RequestUserInputOverlay {
+    /// 🍳 이 함수는 현재 질문/선택지/메모/footer 구성을 보고 오버레이 높이를 계산한다.
     fn desired_height(&self, width: u16) -> u16 {
         if self.confirm_unanswered_active() {
             return self.unanswered_confirmation_height(width);
@@ -108,12 +123,14 @@ impl Renderable for RequestUserInputOverlay {
         self.render_ui(area, buf);
     }
 
+    /// 🍳 이 함수는 현재 포커스 위치에 맞는 커서 좌표를 돌려준다.
     fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
         self.cursor_pos_impl(area)
     }
 }
 
 impl RequestUserInputOverlay {
+    /// 🍳 답 안 한 질문 확인창에 필요한 제목/행/힌트 원재료를 만든다.
     fn unanswered_confirmation_data(&self) -> UnansweredConfirmationData {
         let unanswered = self.unanswered_question_count();
         let subtitle = format!(
@@ -129,6 +146,7 @@ impl RequestUserInputOverlay {
         }
     }
 
+    /// 🍳 확인창에 들어갈 줄들을 너비에 맞게 감싼 최종 레이아웃 재료를 만든다.
     fn unanswered_confirmation_layout(&self, width: u16) -> UnansweredConfirmationLayout {
         let data = self.unanswered_confirmation_data();
         let content_width = width.max(1);
@@ -148,6 +166,7 @@ impl RequestUserInputOverlay {
         }
     }
 
+    /// 🍳 확인창만 따로 렌더링할 때 필요한 전체 높이를 계산한다.
     fn unanswered_confirmation_height(&self, width: u16) -> u16 {
         let outer = Rect::new(0, 0, width, u16::MAX);
         let inner = menu_surface_inset(outer);
@@ -168,6 +187,7 @@ impl RequestUserInputOverlay {
         height.max(MIN_OVERLAY_HEIGHT as u16)
     }
 
+    /// 🍳 "답 안 한 질문이 있다" 확인창을 실제 화면에 그린다.
     fn render_unanswered_confirmation(&self, area: Rect, buf: &mut Buffer) {
         let content_area = render_menu_surface(area, buf);
         if content_area.width == 0 || content_area.height == 0 {
@@ -245,6 +265,7 @@ impl RequestUserInputOverlay {
     }
 
     /// Render the full request-user-input overlay.
+    /// 🍳 이 함수는 일반 질문 화면과 unanswered 확인창 중 맞는 쪽을 골라 전체 오버레이를 그린다.
     pub(super) fn render_ui(&self, area: Rect, buf: &mut Buffer) {
         if area.width == 0 || area.height == 0 {
             return;
