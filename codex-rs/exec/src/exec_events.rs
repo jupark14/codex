@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   `codex exec --json`이 내보내는 이벤트 줄의 공통 모양을 정의한다.
+//!   비유로 말하면 방송 자막팀이 모두 같은 양식으로 쓰도록 나눠 주는 빈 폼 묶음이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/exec/src/event_processor_with_jsonl_output.rs`
+//!   - 외부 도구/스크립트 (`codex exec --json` 출력 소비자)
+//!
+//! 🧩 핵심 개념:
+//!   - `ThreadEvent` = 한 줄짜리 큰 사건 종류
+//!   - `ThreadItemDetails` = 그 사건 안에 들어가는 실제 내용물 카드
+
 use codex_protocol::models::WebSearchAction;
 use serde::Deserialize;
 use serde::Serialize;
@@ -6,6 +18,8 @@ use std::collections::HashMap;
 use ts_rs::TS;
 
 /// Top-level JSONL events emitted by codex exec
+/// 🍳 이 enum은 방송 자막 첫 단어처럼 "이번 줄이 어떤 사건인지"를 고른다.
+///   실제 exec 상황 → JSONL 이벤트 종류
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "type")]
 pub enum ThreadEvent {
@@ -57,6 +71,8 @@ pub struct TurnFailedEvent {
 }
 
 /// Describes the usage of tokens during a turn.
+/// 🍳 이 구조체는 한 턴에서 토큰을 얼마나 썼는지 적는 영수증이다.
+///   누적 입력/캐시/출력 토큰 수 → turn usage 요약
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, Default)]
 pub struct Usage {
     /// The number of input tokens used during the turn.
@@ -89,6 +105,8 @@ pub struct ThreadErrorEvent {
 }
 
 /// Canonical representation of a thread item and its domain-specific payload.
+/// 🍳 이 구조체는 사건 카드 바깥 봉투다.
+///   공통 id + 세부 내용 → 하나의 thread item
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ThreadItem {
     pub id: String,
@@ -97,6 +115,8 @@ pub struct ThreadItem {
 }
 
 /// Typed payloads for each supported thread item type.
+/// 🍳 이 enum은 봉투 안에 들어갈 카드 종류를 정하는 칸막이다.
+///   아이템 종류별 실제 payload → `ThreadItem` 세부 본문
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThreadItemDetails {
@@ -141,6 +161,7 @@ pub struct ReasoningItem {
 }
 
 /// The status of a command execution.
+/// 🍳 이 enum은 명령 실행이 어느 단계인지 알려 주는 신호등이다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandExecutionStatus {
@@ -193,6 +214,7 @@ pub enum PatchChangeKind {
 }
 
 /// The status of an MCP tool call.
+/// 🍳 이 enum은 MCP 도구 호출의 현재 상태를 체크하는 전광판이다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum McpToolCallStatus {
@@ -203,6 +225,7 @@ pub enum McpToolCallStatus {
 }
 
 /// The status of a collab tool call.
+/// 🍳 이 enum은 협업 도구 호출이 아직 달리는지 끝났는지 표시한다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CollabToolCallStatus {
@@ -254,6 +277,8 @@ pub struct CollabToolCallItem {
 }
 
 /// Result payload produced by an MCP tool invocation.
+/// 🍳 이 구조체는 MCP 도구가 돌려준 결과 상자다.
+///   텍스트/구조화 데이터 → 도구 호출 결과물
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct McpToolCallItemResult {
     // NOTE: `rmcp::model::Content` (and its `RawContent` variants) would be a
@@ -274,6 +299,7 @@ pub struct McpToolCallItemError {
 }
 
 /// A call to an MCP tool.
+/// 🍳 이 구조체는 MCP 도구 호출 주문서와 결과표를 함께 담는다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct McpToolCallItem {
     pub server: String,
@@ -286,6 +312,7 @@ pub struct McpToolCallItem {
 }
 
 /// A web search request.
+/// 🍳 이 구조체는 웹 검색 요청 한 건을 적는 검색 접수표다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct WebSearchItem {
     pub id: String,
@@ -300,12 +327,14 @@ pub struct ErrorItem {
 }
 
 /// An item in agent's to-do list.
+/// 🍳 이 구조체는 해야 할 일 한 칸짜리 체크박스다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TodoItem {
     pub text: String,
     pub completed: bool,
 }
 
+/// 🍳 이 구조체는 체크박스 여러 개를 묶어 둔 todo 보드다.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct TodoListItem {
     pub items: Vec<TodoItem>,
