@@ -3,12 +3,25 @@
 //!
 //! We intentionally keep these types TS/JSON-schema friendly (via `ts-rs` and
 //! `schemars`) so they can be embedded in Codex's own protocol structures.
+//!
+//! 📄 이 모듈이 하는 일:
+//!   MCP에서 주고받는 도구/리소스/호출 결과를 Codex 프로토콜 친화적인 타입으로 정리한다.
+//!   비유로 말하면 여러 가게에서 온 주문서 형식을 우리 가게 장부 형식에 맞게 다시 적는 변환 창구다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/protocol/src/lib.rs`
+//!   - MCP 연결/직렬화/앱 서버 코드
+//!
+//! 🧩 핵심 개념:
+//!   - TS/JsonSchema friendly = 웹/앱 쪽도 같은 모양으로 쉽게 이해할 수 있는 자료형
+//!   - adapter helper = wire에서 온 값을 protocol 타입으로 갈아 끼우는 변환기
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
 /// ID of a request, which can be either a string or an integer.
+/// 🍳 이 enum은 요청 번호표가 글자형인지 숫자형인지 둘 다 받을 수 있게 하는 양면 이름표다.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(untagged)]
 pub enum RequestId {
@@ -27,6 +40,7 @@ impl std::fmt::Display for RequestId {
 }
 
 /// Definition for a tool the client can call.
+/// 🍳 이 구조체는 MCP 도구 하나의 설명서를 담는 카드다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Tool {
@@ -53,6 +67,7 @@ pub struct Tool {
 }
 
 /// A known resource that the server is capable of reading.
+/// 🍳 이 구조체는 MCP 서버가 읽어 줄 수 있는 리소스 한 건의 안내표다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Resource {
@@ -83,6 +98,7 @@ pub struct Resource {
 }
 
 /// Contents returned when reading a resource from an MCP server.
+/// 🍳 이 enum은 리소스 내용이 텍스트인지 바이너리(blob)인지 고르는 상자다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(untagged)]
 pub enum ResourceContent {
@@ -115,6 +131,7 @@ pub enum ResourceContent {
 }
 
 /// A template description for resources available on the server.
+/// 🍳 이 구조체는 매개변수로 채워 쓰는 리소스 템플릿 설명서다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceTemplate {
@@ -135,6 +152,7 @@ pub struct ResourceTemplate {
 }
 
 /// The server's response to a tool call.
+/// 🍳 이 구조체는 MCP 도구 호출 결과 상자를 담는다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CallToolResult {
@@ -160,6 +178,7 @@ fn deserialize_lossy_opt_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::
 where
     D: serde::Deserializer<'de>,
 {
+    // 🧮 숫자 타입이 i64/u64 어느 쪽으로 와도 최대한 사람 말로 "정수 크기"만 살려서 읽는다.
     match Option::<serde_json::Number>::deserialize(deserializer)? {
         Some(number) => {
             if let Some(v) = number.as_i64() {
@@ -195,6 +214,7 @@ struct ToolSerde {
 }
 
 impl From<ToolSerde> for Tool {
+    /// 🍳 이 변환은 wire에서 온 임시 봉투를 실제 `Tool` 카드로 옮겨 적는다.
     fn from(value: ToolSerde) -> Self {
         let ToolSerde {
             name,

@@ -17,6 +17,18 @@
 //! The key invariant is that traversal follows first-seen spawn order rather than thread-id sort
 //! order. Once a thread id is observed it keeps its place in the cycle even if the entry is later
 //! updated or marked closed.
+//!
+//! 📄 이 파일이 하는 일:
+//!   TUI의 다중 에이전트 picker에서 "누가 몇 번째였는지" 순서를 안정적으로 관리한다.
+//!   비유로 말하면 줄 서기 번호표를 처음 받은 순서대로 기억해 두고, 이름표가 바뀌어도 줄 순서는 안 흔들리게 지켜 주는 안내 도우미다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - `/agent` picker와 footer 라벨 생성 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `order` = 처음 본 순서를 기억하는 줄서기 목록
+//!   - `threads` = 각 thread id의 최신 이름표/닫힘 상태를 담는 사전
 
 use crate::multi_agents::AgentPickerThreadEntry;
 use crate::multi_agents::format_agent_picker_item_name;
@@ -35,6 +47,7 @@ use std::collections::HashMap;
 /// stores the latest metadata for those ids. Mutation is intentionally funneled through `upsert`,
 /// `mark_closed`, and `clear` so those two collections do not drift semantically even if they are
 /// temporarily out of sync during teardown races.
+/// 🍳 이 구조체는 picker 순서표와 최신 이름표를 함께 들고 있는 정리함이다.
 #[derive(Debug, Default)]
 pub(crate) struct AgentNavigationState {
     /// Latest picker metadata for each tracked thread id.
@@ -44,6 +57,7 @@ pub(crate) struct AgentNavigationState {
 }
 
 /// Direction of keyboard traversal through the stable picker order.
+/// 🍳 이 enum은 키보드 이동이 "앞으로"인지 "뒤로"인지 알려 주는 화살표 표지판이다.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AgentNavigationDirection {
     /// Move toward the entry that was seen earlier in spawn order, wrapping at the front.
@@ -59,6 +73,7 @@ impl AgentNavigationState {
     /// metadata captured for picker or footer rendering. If a caller assumes every tracked thread
     /// must be present here, shutdown races can turn that assumption into a panic elsewhere, so
     /// this stays optional.
+    /// 🍳 이 함수는 특정 thread의 최신 picker 카드를 있으면 꺼내 준다.
     pub(crate) fn get(&self, thread_id: &ThreadId) -> Option<&AgentPickerThreadEntry> {
         self.threads.get(thread_id)
     }
@@ -67,6 +82,7 @@ impl AgentNavigationState {
     ///
     /// This is the cheapest way for `App` to decide whether opening the picker should show "No
     /// agents available yet." rather than constructing picker rows from an empty state.
+    /// 🍳 이 함수는 현재 추적 중인 에이전트가 하나도 없는지 빠르게 확인한다.
     pub(crate) fn is_empty(&self) -> bool {
         self.threads.is_empty()
     }
@@ -76,6 +92,7 @@ impl AgentNavigationState {
     /// The key invariant of this module is enforced here: a thread id is appended to `order` only
     /// the first time it is seen. Later updates may change nickname, role, or closed state, but
     /// they must not move the thread in the cycle or keyboard navigation would feel unstable.
+    /// 🍳 이 함수는 최신 정보는 갱신하되 처음 본 순서는 한 번만 기록한다.
     pub(crate) fn upsert(
         &mut self,
         thread_id: ThreadId,
@@ -102,6 +119,7 @@ impl AgentNavigationState {
     /// next/previous navigation does not reshuffle around disappearing entries. If a caller "cleans
     /// this up" by deleting the entry instead, wraparound navigation will silently change shape
     /// mid-session.
+    /// 🍳 이 함수는 thread를 지우지 않고 "닫힘" 스티커만 붙인다.
     pub(crate) fn mark_closed(&mut self, thread_id: ThreadId) {
         if let Some(entry) = self.threads.get_mut(&thread_id) {
             entry.is_closed = true;
@@ -117,6 +135,7 @@ impl AgentNavigationState {
     ///
     /// This is used when `App` tears down thread event state and needs the picker cache to return
     /// to a pristine single-session state.
+    /// 🍳 이 함수는 picker 정리함을 완전히 비운다.
     pub(crate) fn clear(&mut self) {
         self.threads.clear();
         self.order.clear();
@@ -127,6 +146,7 @@ impl AgentNavigationState {
     /// This is reserved for entries that were only discovered opportunistically and never became
     /// replayable local threads. Keeping those around after the backend confirms they are gone
     /// would leave ghost rows in `/agent`.
+    /// 🍳 이 함수는 정말 사라진 thread를 순서표와 카드 사전에서 함께 제거한다.
     pub(crate) fn remove(&mut self, thread_id: ThreadId) {
         self.threads.remove(&thread_id);
         self.order.retain(|candidate| *candidate != thread_id);
@@ -137,6 +157,7 @@ impl AgentNavigationState {
     /// `App` uses this to decide whether the picker should be available even when the collaboration
     /// feature flag is currently disabled, because already-existing sub-agent threads should remain
     /// inspectable.
+    /// 🍳 이 함수는 메인 thread 말고 다른 에이전트가 하나라도 있는지 본다.
     pub(crate) fn has_non_primary_thread(&self, primary_thread_id: Option<ThreadId>) -> bool {
         self.threads
             .keys()
@@ -148,6 +169,7 @@ impl AgentNavigationState {
     /// The `order` vector is intentionally historical and may briefly contain thread ids that no
     /// longer have cached metadata, so this filters through the map instead of assuming both
     /// collections are perfectly synchronized.
+    /// 🍳 이 함수는 실제 살아 있는 카드만 골라 현재 picker 순서대로 돌려준다.
     pub(crate) fn ordered_threads(&self) -> Vec<(ThreadId, &AgentPickerThreadEntry)> {
         self.order
             .iter()
@@ -156,6 +178,7 @@ impl AgentNavigationState {
     }
 
     /// Returns tracked thread ids in the same stable order used by the picker.
+    /// 🍳 이 함수는 순서표에서 thread id만 뽑은 간단 버전을 돌려준다.
     pub(crate) fn tracked_thread_ids(&self) -> Vec<ThreadId> {
         self.ordered_threads()
             .into_iter()
@@ -169,6 +192,7 @@ impl AgentNavigationState {
     /// just whichever thread bookkeeping most recently marked active. If the wrong current thread
     /// is supplied, next/previous navigation will jump in a way that feels nondeterministic even
     /// though the cache itself is correct.
+    /// 🍳 이 함수는 현재 보고 있는 thread 기준으로 다음/이전 번호표를 계산한다.
     pub(crate) fn adjacent_thread_id(
         &self,
         current_displayed_thread_id: Option<ThreadId>,
@@ -202,6 +226,7 @@ impl AgentNavigationState {
     /// single-thread sessions do not waste footer space restating the obvious. When metadata for
     /// the displayed thread is missing, the label falls back to the same generic naming rules used
     /// by the picker.
+    /// 🍳 이 함수는 footer에 보여 줄 현재 에이전트 이름표를 만든다.
     pub(crate) fn active_agent_label(
         &self,
         current_displayed_thread_id: Option<ThreadId>,
@@ -235,6 +260,7 @@ impl AgentNavigationState {
     ///
     /// Keeping this text derived from the actual shortcut helpers prevents the picker copy from
     /// drifting if the bindings ever change on one platform.
+    /// 🍳 이 함수는 실제 단축키 helper를 써서 picker 안내 문장을 만든다.
     pub(crate) fn picker_subtitle() -> String {
         let previous: Span<'static> = previous_agent_shortcut().into();
         let next: Span<'static> = next_agent_shortcut().into();

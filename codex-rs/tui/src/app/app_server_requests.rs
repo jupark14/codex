@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   TUI가 받은 app-server 요청들을 "나중에 어떤 응답을 돌려줘야 하는지" request id와 함께 기억한다.
+//!   비유로 말하면 행정실에서 신청서 번호를 받아 두었다가, 학생이 답을 가져오면 원래 신청서 번호와 다시 짝지어 돌려보내는 접수대 장부다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/app.rs`
+//!   - app-server request/response 처리 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - pending request map = 아직 답하지 않은 신청서 보관함
+//!   - resolution = 사용자가 내린 결정을 app-server가 이해하는 JSON 결과로 바꾼 응답서
+
 use std::collections::HashMap;
 
 use crate::app_command::AppCommand;
@@ -15,18 +27,21 @@ use codex_app_server_protocol::ToolRequestUserInputResponse;
 use codex_protocol::mcp::RequestId as McpRequestId;
 use codex_protocol::protocol::ReviewDecision;
 
+/// 🍳 이 구조체는 app-server 요청 하나에 대해 나중에 돌려줄 결과 봉투다.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct AppServerRequestResolution {
     pub(super) request_id: AppServerRequestId,
     pub(super) result: serde_json::Value,
 }
 
+/// 🍳 이 구조체는 TUI가 아직 지원하지 않는 요청을 거절할 때 쓰는 안내문 카드다.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct UnsupportedAppServerRequest {
     pub(super) request_id: AppServerRequestId,
     pub(super) message: String,
 }
 
+/// 🍳 이 구조체는 "아직 답 안 한 app-server 요청들"을 종류별로 기억하는 장부다.
 #[derive(Debug, Default)]
 pub(super) struct PendingAppServerRequests {
     exec_approvals: HashMap<String, AppServerRequestId>,
@@ -37,6 +52,7 @@ pub(super) struct PendingAppServerRequests {
 }
 
 impl PendingAppServerRequests {
+    /// 🍳 이 함수는 장부를 통째로 비워 현재 세션의 미해결 요청을 초기화한다.
     pub(super) fn clear(&mut self) {
         self.exec_approvals.clear();
         self.file_change_approvals.clear();
@@ -51,6 +67,8 @@ impl PendingAppServerRequests {
     ) -> Option<UnsupportedAppServerRequest> {
         match request {
             ServerRequest::CommandExecutionRequestApproval { request_id, params } => {
+                // 🧾 exec approval은 approval_id가 있으면 그걸 쓰고,
+                //    없으면 item_id를 임시 대표 번호로 써서 나중 응답과 연결한다.
                 let approval_id = params
                     .approval_id
                     .clone()
@@ -107,6 +125,8 @@ impl PendingAppServerRequests {
         }
     }
 
+    /// 🍳 이 함수는 사용자가 내린 결정을 찾아,
+    ///   대응하는 app-server request id와 JSON 응답 몸체를 함께 만든다.
     pub(super) fn take_resolution<T>(
         &mut self,
         op: T,
@@ -170,6 +190,8 @@ impl PendingAppServerRequests {
                 .map(|request_id| {
                     Ok::<AppServerRequestResolution, String>(AppServerRequestResolution {
                         request_id,
+                        // 🔄 현재 TUI 응답 타입을 한 번 JSON으로 바꿨다가
+                        //    app-server 전용 타입으로 다시 읽는 이유는 wire 모양을 정확히 맞추기 위해서다.
                         result: serde_json::to_value(
                             serde_json::from_value::<ToolRequestUserInputResponse>(
                                 serde_json::to_value(response).map_err(|err| {
@@ -229,6 +251,7 @@ impl PendingAppServerRequests {
         Ok(resolution)
     }
 
+    /// 🍳 이 함수는 app-server가 이미 해결됐다고 알려 준 request id를 장부에서 지운다.
     pub(super) fn resolve_notification(&mut self, request_id: &AppServerRequestId) {
         self.exec_approvals.retain(|_, value| value != request_id);
         self.file_change_approvals

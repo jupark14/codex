@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   skill/app/tool mention 후보를 검색어로 걸러 보여 주는 popup을 관리한다.
+//!   비유로 말하면 사람 이름 초성표처럼 입력한 단어에 맞는 멘션 카드만 골라 보여 주는 빠른 찾기 창이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/chat_composer.rs`
+//!   - mention 삽입 popup UI
+//!
+//! 🧩 핵심 개념:
+//!   - `MentionItem` = 화면에 보여 줄 멘션 후보 카드
+//!   - fuzzy match = 정확히 같지 않아도 비슷한 이름을 찾아 순위를 매기는 검색
+
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
@@ -17,6 +29,7 @@ use crate::render::RectExt;
 use crate::text_formatting::truncate_text;
 use codex_utils_fuzzy_match::fuzzy_match;
 
+/// 🍳 이 구조체는 하나의 멘션 후보를 화면에 보여 줄 데이터 카드다.
 #[derive(Clone, Debug)]
 pub(crate) struct MentionItem {
     pub(crate) display_name: String,
@@ -30,6 +43,7 @@ pub(crate) struct MentionItem {
 
 const MENTION_NAME_TRUNCATE_LEN: usize = 24;
 
+/// 🍳 이 구조체는 멘션 popup의 현재 검색어와 선택 상태를 관리한다.
 pub(crate) struct SkillPopup {
     query: String,
     mentions: Vec<MentionItem>,
@@ -37,6 +51,7 @@ pub(crate) struct SkillPopup {
 }
 
 impl SkillPopup {
+    /// 🍳 이 함수는 멘션 후보 목록으로 새 popup을 만든다.
     pub(crate) fn new(mentions: Vec<MentionItem>) -> Self {
         Self {
             query: String::new(),
@@ -45,34 +60,40 @@ impl SkillPopup {
         }
     }
 
+    /// 🍳 이 함수는 후보 목록이 새로 오면 교체하고 선택 상태를 다시 맞춘다.
     pub(crate) fn set_mentions(&mut self, mentions: Vec<MentionItem>) {
         self.mentions = mentions;
         self.clamp_selection();
     }
 
+    /// 🍳 이 함수는 검색어를 갱신하고 필터된 선택 위치를 다시 맞춘다.
     pub(crate) fn set_query(&mut self, query: &str) {
         self.query = query.to_string();
         self.clamp_selection();
     }
 
+    /// 🍳 이 함수는 결과 수에 맞춰 popup 높이를 계산한다.
     pub(crate) fn calculate_required_height(&self, _width: u16) -> u16 {
         let rows = self.rows_from_matches(self.filtered());
         let visible = rows.len().clamp(1, MAX_POPUP_ROWS);
         (visible as u16).saturating_add(2)
     }
 
+    /// 🍳 위쪽 멘션 후보로 선택을 한 칸 움직인다.
     pub(crate) fn move_up(&mut self) {
         let len = self.filtered_items().len();
         self.state.move_up_wrap(len);
         self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
     }
 
+    /// 🍳 아래쪽 멘션 후보로 선택을 한 칸 움직인다.
     pub(crate) fn move_down(&mut self) {
         let len = self.filtered_items().len();
         self.state.move_down_wrap(len);
         self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
     }
 
+    /// 🍳 현재 선택된 멘션 후보가 있으면 실제 카드 참조를 돌려준다.
     pub(crate) fn selected_mention(&self) -> Option<&MentionItem> {
         let matches = self.filtered_items();
         let idx = self.state.selected_idx?;
@@ -80,16 +101,19 @@ impl SkillPopup {
         self.mentions.get(*mention_idx)
     }
 
+    /// 🍳 필터 결과 길이에 맞게 선택 인덱스를 안전 범위로 맞춘다.
     fn clamp_selection(&mut self) {
         let len = self.filtered_items().len();
         self.state.clamp_selection(len);
         self.state.ensure_visible(len, MAX_POPUP_ROWS.min(len));
     }
 
+    /// 🍳 현재 필터에서 보이는 후보의 실제 원본 인덱스 목록만 뽑는다.
     fn filtered_items(&self) -> Vec<usize> {
         self.filtered().into_iter().map(|(idx, _, _)| idx).collect()
     }
 
+    /// 🍳 필터 결과를 렌더링용 행 데이터로 바꾼다.
     fn rows_from_matches(
         &self,
         matches: Vec<(usize, Option<Vec<usize>>, i32)>,
@@ -127,6 +151,7 @@ impl SkillPopup {
             .collect()
     }
 
+    /// 🍳 검색어에 맞는 멘션 후보를 fuzzy match로 골라 정렬한다.
     fn filtered(&self) -> Vec<(usize, Option<Vec<usize>>, i32)> {
         let filter = self.query.trim();
         let mut out: Vec<(usize, Option<Vec<usize>>, i32)> = Vec::new();
@@ -217,6 +242,7 @@ impl WidgetRef for SkillPopup {
     }
 }
 
+/// 🍳 popup 아래쪽에 보여 줄 공통 힌트 문장을 만든다.
 fn skill_popup_hint_line() -> Line<'static> {
     Line::from(vec![
         "Press ".into(),

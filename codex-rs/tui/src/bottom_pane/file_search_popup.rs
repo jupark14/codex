@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   `@` 파일 검색 popup의 질의, 결과 목록, 선택 스크롤 상태를 관리한다.
+//!   비유로 말하면 서랍 이름을 입력하면 맞는 파일 카드만 보여 주고 위아래로 고르게 해 주는 카드 정리함이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/chat_composer.rs`
+//!   - 파일 검색 popup 렌더링 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `pending_query` = 아직 결과를 기다리는 최신 검색어
+//!   - `display_query` = 지금 화면에 보이는 결과가 어떤 검색어 기준인지 알려 주는 꼬리표
+
 use std::path::PathBuf;
 
 use codex_file_search::FileMatch;
@@ -14,6 +26,7 @@ use super::selection_popup_common::GenericDisplayRow;
 use super::selection_popup_common::render_rows;
 
 /// Visual state for the file-search popup.
+/// 🍳 이 구조체는 파일 검색 popup의 현재 검색어/결과/선택 상태를 들고 있다.
 pub(crate) struct FileSearchPopup {
     /// Query corresponding to the `matches` currently shown.
     display_query: String,
@@ -29,6 +42,7 @@ pub(crate) struct FileSearchPopup {
 }
 
 impl FileSearchPopup {
+    /// 🍳 이 함수는 빈 파일 검색 popup을 만든다.
     pub(crate) fn new() -> Self {
         Self {
             display_query: String::new(),
@@ -40,6 +54,7 @@ impl FileSearchPopup {
     }
 
     /// Update the query and reset state to *waiting*.
+    /// 🍳 이 함수는 새 검색어를 기억하고 "결과 기다리는 중" 상태로 바꾼다.
     pub(crate) fn set_query(&mut self, query: &str) {
         if query == self.pending_query {
             return;
@@ -53,6 +68,7 @@ impl FileSearchPopup {
 
     /// Put the popup into an "idle" state used for an empty query (just "@").
     /// Shows a hint instead of matches until the user types more characters.
+    /// 🍳 이 함수는 검색어가 비었을 때 결과 대신 안내 문구를 보여 주는 idle 상태로 돌린다.
     pub(crate) fn set_empty_prompt(&mut self) {
         self.display_query.clear();
         self.pending_query.clear();
@@ -64,6 +80,7 @@ impl FileSearchPopup {
 
     /// Replace matches when a `FileSearchResult` arrives.
     /// Replace matches. Only applied when `query` matches `pending_query`.
+    /// 🍳 이 함수는 현재 기다리던 검색어와 응답 검색어가 같을 때만 결과 목록을 갈아 끼운다.
     pub(crate) fn set_matches(&mut self, query: &str, matches: Vec<FileMatch>) {
         if query != self.pending_query {
             return; // stale
@@ -78,6 +95,7 @@ impl FileSearchPopup {
     }
 
     /// Move selection cursor up.
+    /// 🍳 선택을 위쪽 파일로 한 칸 움직인다.
     pub(crate) fn move_up(&mut self) {
         let len = self.matches.len();
         self.state.move_up_wrap(len);
@@ -85,12 +103,14 @@ impl FileSearchPopup {
     }
 
     /// Move selection cursor down.
+    /// 🍳 선택을 아래쪽 파일로 한 칸 움직인다.
     pub(crate) fn move_down(&mut self) {
         let len = self.matches.len();
         self.state.move_down_wrap(len);
         self.state.ensure_visible(len, len.min(MAX_POPUP_ROWS));
     }
 
+    /// 🍳 현재 선택된 파일 경로가 있으면 돌려준다.
     pub(crate) fn selected_match(&self) -> Option<&PathBuf> {
         self.state
             .selected_idx
@@ -98,6 +118,7 @@ impl FileSearchPopup {
             .map(|file_match| &file_match.path)
     }
 
+    /// 🍳 이 함수는 결과 개수와 상태에 따라 popup 높이를 계산한다.
     pub(crate) fn calculate_required_height(&self) -> u16 {
         // Row count depends on whether we already have matches. If no matches
         // yet (e.g. initial search or query with no results) reserve a single

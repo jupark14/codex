@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   사용자가 여러 줄 custom prompt를 직접 적어 제출하는 작은 입력 모달을 렌더링한다.
+//!   비유로 말하면 "추가 요청사항 적는 칸"이 있는 메모지를 띄워 쓰고 제출하게 하는 팝업 메모판이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - custom review/custom prompt 입력 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `TextArea` = 실제 여러 줄 입력 상자
+//!   - `on_submit` = 사용자가 Enter로 제출했을 때 실행할 콜백
+
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -22,9 +34,11 @@ use super::textarea::TextArea;
 use super::textarea::TextAreaState;
 
 /// Callback invoked when the user submits a custom prompt.
+/// 🍳 사용자가 제출한 최종 문자열을 바깥으로 넘기는 호출 규약이다.
 pub(crate) type PromptSubmitted = Box<dyn Fn(String) + Send + Sync>;
 
 /// Minimal multi-line text input view to collect custom review instructions.
+/// 🍳 이 구조체는 제목/placeholder/텍스트 입력칸을 가진 간단한 프롬프트 입력창이다.
 pub(crate) struct CustomPromptView {
     title: String,
     placeholder: String,
@@ -38,6 +52,7 @@ pub(crate) struct CustomPromptView {
 }
 
 impl CustomPromptView {
+    /// 🍳 이 함수는 custom prompt 입력창을 새로 만든다.
     pub(crate) fn new(
         title: String,
         placeholder: String,
@@ -100,6 +115,7 @@ impl BottomPaneView for CustomPromptView {
         if pasted.is_empty() {
             return false;
         }
+        // 📋 붙여넣기 내용은 그대로 입력칸에 넣고 다시 그리기만 요청한다.
         self.textarea.insert_str(&pasted);
         true
     }
@@ -235,6 +251,7 @@ impl Renderable for CustomPromptView {
 }
 
 impl CustomPromptView {
+    /// 🍳 이 함수는 현재 너비에서 입력칸이 몇 줄 높이여야 하는지 계산한다.
     fn input_height(&self, width: u16) -> u16 {
         let usable_width = width.saturating_sub(2);
         let text_height = self.textarea.desired_height(usable_width).clamp(1, 8);

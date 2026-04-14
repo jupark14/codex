@@ -6,6 +6,18 @@
 //! - Select items
 //! - Reorder items
 //! - Preview the rendered title
+//!
+//! 📄 이 파일이 하는 일:
+//!   터미널 제목줄에 어떤 항목을 보여 줄지 고르고 순서를 바꾸는 설정 popup을 제공한다.
+//!   비유로 말하면 문패에 프로젝트명, 브랜치, 모델명을 어떤 순서로 붙일지 고르는 문패 편집기다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - terminal title 설정 흐름
+//!
+//! 🧩 핵심 개념:
+//!   - `TerminalTitleItem` = 제목줄에 올릴 수 있는 정보 조각
+//!   - preview = 현재 선택 조합이 실제 제목으로 어떻게 보일지 미리 보는 샘플
 
 use itertools::Itertools;
 use ratatui::buffer::Buffer;
@@ -29,6 +41,7 @@ use crate::render::renderable::Renderable;
 /// Variants serialize to kebab-case identifiers (e.g. `AppName` -> `"app-name"`)
 /// via strum. These identifiers are persisted in user config files, so renaming
 /// or removing a variant is a breaking config change.
+/// 🍳 이 enum은 터미널 제목에 넣을 수 있는 항목 종류표다.
 #[derive(EnumIter, EnumString, Display, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TerminalTitleItem {
@@ -51,6 +64,7 @@ pub(crate) enum TerminalTitleItem {
 }
 
 impl TerminalTitleItem {
+    /// 🍳 각 제목 항목을 사람이 읽기 쉬운 설명문으로 바꾼다.
     pub(crate) fn description(self) -> &'static str {
         match self {
             TerminalTitleItem::AppName => "Codex app name",
@@ -72,6 +86,7 @@ impl TerminalTitleItem {
     ///
     /// These are illustrative sample values, not live data from the current
     /// session.
+    /// 🍳 미리보기용 예시 문자열을 돌려준다.
     pub(crate) fn preview_example(self) -> &'static str {
         match self {
             TerminalTitleItem::AppName => "codex",
@@ -90,6 +105,7 @@ impl TerminalTitleItem {
     /// The spinner gets a plain space on either side so it reads as
     /// `my-project <spinner> Working` rather than `my-project | <spinner> | Working`.
     /// All other adjacent items are joined with ` | `.
+    /// 🍳 이전 항목과 현재 항목 사이에 어떤 구분자를 넣을지 정한다.
     pub(crate) fn separator_from_previous(self, previous: Option<Self>) -> &'static str {
         match previous {
             None => "",
@@ -103,6 +119,7 @@ impl TerminalTitleItem {
     }
 }
 
+/// 🍳 저장된 id 문자열 목록을 모두 올바른 `TerminalTitleItem` enum으로 바꿔 본다.
 fn parse_terminal_title_items<T>(ids: impl Iterator<Item = T>) -> Option<Vec<TerminalTitleItem>>
 where
     T: AsRef<str>,
@@ -117,6 +134,7 @@ where
 }
 
 /// Interactive view for configuring terminal-title items.
+/// 🍳 `MultiSelectPicker`를 감싸 제목줄 전용 동작을 붙인 설정 뷰다.
 pub(crate) struct TerminalTitleSetupView {
     picker: MultiSelectPicker,
 }
@@ -128,6 +146,7 @@ impl TerminalTitleSetupView {
     /// main TUI still warns about them when rendering the actual title, but the
     /// picker itself only exposes the selectable items it can meaningfully
     /// preview and persist.
+    /// 🍳 현재 설정을 앞쪽에 배치해 terminal title 설정 popup을 만든다.
     pub(crate) fn new(title_items: Option<&[String]>, app_event_tx: AppEventSender) -> Self {
         let selected_items = title_items
             .into_iter()
@@ -205,6 +224,7 @@ impl TerminalTitleSetupView {
         }
     }
 
+    /// 🍳 제목 항목 하나를 multi-select picker가 쓰는 행 데이터로 바꾼다.
     fn title_select_item(item: TerminalTitleItem, enabled: bool) -> MultiSelectItem {
         MultiSelectItem {
             id: item.to_string(),

@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   현재 보고 있지 않은 thread들 중 승인 대기 중인 것이 있으면 짧은 목록으로 보여 준다.
+//!   비유로 말하면 다른 교실에서 "선생님 확인 필요" 메모가 쌓였다고 알려 주는 복도 알림판이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/mod.rs`
+//!   - bottom pane 대기 승인 미리보기 UI
+//!
+//! 🧩 핵심 개념:
+//!   - inactive thread = 지금 화면에 안 보이지만 따로 존재하는 다른 대화방
+//!   - `/agent` hint = 승인 처리가 필요한 thread로 이동하는 빠른 길 안내
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -9,17 +21,20 @@ use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_lines;
 
 /// Widget that lists inactive threads with outstanding approval requests.
+/// 🍳 이 구조체는 승인 대기 중인 다른 thread 이름표들을 보여 주는 작은 알림판이다.
 pub(crate) struct PendingThreadApprovals {
     threads: Vec<String>,
 }
 
 impl PendingThreadApprovals {
+    /// 🍳 이 함수는 빈 알림판을 만든다.
     pub(crate) fn new() -> Self {
         Self {
             threads: Vec::new(),
         }
     }
 
+    /// 🍳 이 함수는 thread 목록이 실제로 바뀐 경우에만 새 목록으로 교체한다.
     pub(crate) fn set_threads(&mut self, threads: Vec<String>) -> bool {
         if self.threads == threads {
             return false;
@@ -28,6 +43,7 @@ impl PendingThreadApprovals {
         true
     }
 
+    /// 🍳 현재 표시할 thread가 하나도 없는지 확인한다.
     pub(crate) fn is_empty(&self) -> bool {
         self.threads.is_empty()
     }
@@ -37,6 +53,7 @@ impl PendingThreadApprovals {
         &self.threads
     }
 
+    /// 🍳 이 함수는 thread 목록을 실제 렌더링 가능한 문단으로 바꾼다.
     fn as_renderable(&self, width: u16) -> Box<dyn Renderable> {
         if self.threads.is_empty() || width < 4 {
             return Box::new(());

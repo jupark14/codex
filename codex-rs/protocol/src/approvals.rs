@@ -1,3 +1,15 @@
+//! 📄 이 모듈이 하는 일:
+//!   명령 실행, 네트워크 접근, MCP 호출 같은 위험 행동을 승인 화면에 보여 줄 공통 타입을 정의한다.
+//!   비유로 말하면 학교에서 외출증, 특별실 사용 신청서, 보호자 확인표를 같은 행정실 양식으로 묶어 둔 서류함이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/protocol/src/lib.rs`
+//!   - 승인 UI/앱 서버/guardian 판단 코드
+//!
+//! 🧩 핵심 개념:
+//!   - approval event = "이 행동을 해도 되는지" 묻는 신청서
+//!   - amendment = 다음번엔 같은 종류를 덜 묻게 규칙표를 고쳐 두는 제안서
+
 use crate::mcp::RequestId;
 use crate::models::PermissionProfile;
 use crate::parse_command::ParsedCommand;
@@ -14,6 +26,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use ts_rs::TS;
 
+/// 🍳 이 구조체는 실제 샌드박스/네트워크/파일 권한 세트를 한 번에 들고 다니는 권한 상자다.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Permissions {
     pub sandbox_policy: SandboxPolicy,
@@ -21,6 +34,7 @@ pub struct Permissions {
     pub network_sandbox_policy: NetworkSandboxPolicy,
 }
 
+/// 🍳 이 enum은 권한을 "프로필 이름표"로 줄지, "실제 권한 묶음"으로 줄지 고르는 포장 방식이다.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EscalationPermissions {
@@ -33,6 +47,7 @@ pub enum EscalationPermissions {
 /// The `command` tokens form the prefix that would be added as an execpolicy
 /// `prefix_rule(..., decision="allow")`, letting the agent bypass approval for
 /// commands that start with this token sequence.
+/// 🍳 이 구조체는 "이 앞부분으로 시작하는 명령은 다음부터 그냥 통과시켜도 될까?"를 적는 제안서다.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(transparent)]
 #[ts(type = "Array<string>")]
@@ -41,10 +56,12 @@ pub struct ExecPolicyAmendment {
 }
 
 impl ExecPolicyAmendment {
+    /// 🍳 이 함수는 허용 prefix 토큰 묶음을 제안서 상자에 담는다.
     pub fn new(command: Vec<String>) -> Self {
         Self { command }
     }
 
+    /// 🍳 이 함수는 제안서 안의 명령 prefix를 읽기 전용으로 꺼낸다.
     pub fn command(&self) -> &[String] {
         &self.command
     }
@@ -56,6 +73,7 @@ impl From<Vec<String>> for ExecPolicyAmendment {
     }
 }
 
+/// 🍳 이 enum은 네트워크 요청이 어떤 통로를 쓰는지 적는 배송 수단 표다.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkApprovalProtocol {
@@ -68,6 +86,7 @@ pub enum NetworkApprovalProtocol {
     Socks5Udp,
 }
 
+/// 🍳 이 구조체는 어떤 host에 어떤 프로토콜로 가려는지 적는 네트워크 요청 카드다.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 pub struct NetworkApprovalContext {
     pub host: String,
@@ -81,6 +100,7 @@ pub enum NetworkPolicyRuleAction {
     Deny,
 }
 
+/// 🍳 이 enum은 guardian이 본 위험도를 신호등처럼 적는 표다.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum GuardianRiskLevel {
@@ -90,6 +110,7 @@ pub enum GuardianRiskLevel {
     Critical,
 }
 
+/// 🍳 이 enum은 사용자가 이 행동을 얼마나 직접 허락했는지 체온계처럼 나눈다.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum GuardianUserAuthorization {
@@ -99,6 +120,7 @@ pub enum GuardianUserAuthorization {
     High,
 }
 
+/// 🍳 이 enum은 guardian 심사표가 지금 어디 단계에 있는지 알려 준다.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum GuardianAssessmentStatus {
@@ -122,6 +144,7 @@ pub enum GuardianCommandSource {
     UnifiedExec,
 }
 
+/// 🍳 이 enum은 guardian이 실제로 무엇을 심사했는지 행동 종류별로 나눈다.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[ts(tag = "type", rename_all = "snake_case")]
@@ -162,6 +185,7 @@ pub struct NetworkPolicyAmendment {
     pub action: NetworkPolicyRuleAction,
 }
 
+/// 🍳 이 구조체는 guardian 심사 한 건의 전 과정을 기록하는 생활기록부 한 장이다.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema, TS)]
 pub struct GuardianAssessmentEvent {
     /// Stable identifier for this guardian review lifecycle.
@@ -195,6 +219,8 @@ pub struct GuardianAssessmentEvent {
     pub action: GuardianAssessmentAction,
 }
 
+/// 🍳 이 구조체는 exec 명령 승인 요청서다.
+///   어떤 명령을 어느 폴더에서 왜 실행하려는지 + 사용자가 고를 수 있는 승인 선택지
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS)]
 pub struct ExecApprovalRequestEvent {
     /// Identifier for the associated command execution item.
@@ -244,12 +270,16 @@ pub struct ExecApprovalRequestEvent {
 }
 
 impl ExecApprovalRequestEvent {
+    /// 🍳 이 함수는 세부 approval id가 있으면 그걸 쓰고,
+    ///   없으면 기본 call id를 대표 번호로 쓰는 번호표 선택기다.
     pub fn effective_approval_id(&self) -> String {
         self.approval_id
             .clone()
             .unwrap_or_else(|| self.call_id.clone())
     }
 
+    /// 🍳 이 함수는 새 필드가 비어 있어도 예전 클라이언트와 맞게 기본 버튼 목록을 만들어 준다.
+    ///   명시된 결정 목록 또는 legacy 규칙 → 실제 승인 선택지
     pub fn effective_available_decisions(&self) -> Vec<ReviewDecision> {
         // available_decisions is a new field that may not be populated by older
         // senders, so we fall back to the legacy logic if it's not present.

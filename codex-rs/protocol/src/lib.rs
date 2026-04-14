@@ -1,3 +1,16 @@
+//! 📄 이 모듈이 하는 일:
+//!   `codex-protocol` crate가 바깥에 내보낼 공통 프로토콜 부품들을 문 앞에서 다시 모아 준다.
+//!   비유로 말하면 여러 교실에서 만든 자료를 학교 현관 안내판에 과목별로 정리해 붙이는 목록표다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/core`
+//!   - `codex-rs/exec`
+//!   - `codex-rs/app-server`
+//!
+//! 🧩 핵심 개념:
+//!   - `pub mod` = 바깥 crate가 직접 들어가 볼 수 있게 교실 문을 여는 것
+//!   - `pub use` = 자주 쓰는 타입을 현관 바로 옆에 다시 진열하는 것
+
 pub mod account;
 mod agent_path;
 pub mod auth;

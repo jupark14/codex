@@ -3,6 +3,18 @@
 //! The same sandbox- and feature-gating rules are used by both the composer
 //! and the command popup. Centralizing them here keeps those call sites small
 //! and ensures they stay in sync.
+//!
+//! 📄 이 파일이 하는 일:
+//!   현재 기능 플래그/샌드박스 상태에 맞춰 어떤 slash 명령이 보여야 하는지 골라 준다.
+//!   비유로 말하면 놀이공원 입장권 종류를 보고 탈 수 있는 놀이기구 목록만 열어 주는 게이트 검사표다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/chat_composer.rs`
+//!   - `codex-rs/tui/src/bottom_pane/command_popup.rs`
+//!
+//! 🧩 핵심 개념:
+//!   - gating = 지금 상태에서 허용된 명령만 남기는 필터
+//!   - builtin command = 미리 정의된 slash 명령
 use std::str::FromStr;
 
 use codex_utils_fuzzy_match::fuzzy_match;
@@ -23,6 +35,7 @@ pub(crate) struct BuiltinCommandFlags {
 }
 
 /// Return the built-ins that should be visible/usable for the current input.
+/// 🍳 이 함수는 현재 플래그에 맞는 builtin slash 명령만 골라 목록으로 돌려준다.
 pub(crate) fn builtins_for_input(flags: BuiltinCommandFlags) -> Vec<(&'static str, SlashCommand)> {
     built_in_slash_commands()
         .into_iter()
@@ -41,6 +54,7 @@ pub(crate) fn builtins_for_input(flags: BuiltinCommandFlags) -> Vec<(&'static st
 }
 
 /// Find a single built-in command by exact name, after applying the gating rules.
+/// 🍳 이 함수는 이름이 정확히 맞는 명령이 지금 허용되는지 확인한다.
 pub(crate) fn find_builtin_command(name: &str, flags: BuiltinCommandFlags) -> Option<SlashCommand> {
     let cmd = SlashCommand::from_str(name).ok()?;
     builtins_for_input(flags)
@@ -50,6 +64,7 @@ pub(crate) fn find_builtin_command(name: &str, flags: BuiltinCommandFlags) -> Op
 }
 
 /// Whether any visible built-in fuzzily matches the provided prefix.
+/// 🍳 이 함수는 사용자가 친 접두어와 비슷한 명령이 하나라도 보이는지 확인한다.
 pub(crate) fn has_builtin_prefix(name: &str, flags: BuiltinCommandFlags) -> bool {
     builtins_for_input(flags)
         .into_iter()

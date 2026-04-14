@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   턴이 끝나기 전 쌓여 있는 steer/후속 메시지를 미리보기 형태로 보여 준다.
+//!   비유로 말하면 "곧 보낼 메모들"을 임시 대기함에 쌓아 두고 짧게 미리 읽어 보여 주는 게시판이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/mod.rs`
+//!   - task running 중 queued message 미리보기 UI
+//!
+//! 🧩 핵심 개념:
+//!   - pending steer = 다음 tool 경계에서 곧 보내질 조종 메모
+//!   - queued message = 턴 끝나고 보낼 후속 사용자 메시지
+
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -32,6 +44,7 @@ pub(crate) struct PendingInputPreview {
 const PREVIEW_LINE_LIMIT: usize = 3;
 
 impl PendingInputPreview {
+    /// 🍳 이 함수는 빈 대기 게시판을 만든다.
     pub(crate) fn new() -> Self {
         Self {
             pending_steers: Vec::new(),
@@ -44,10 +57,12 @@ impl PendingInputPreview {
     /// Replace the keybinding shown in the hint line at the bottom of the
     /// queued-messages list.  The caller is responsible for also wiring the
     /// corresponding key event handler.
+    /// 🍳 이 함수는 queued message를 다시 편집할 때 보여 줄 단축키 문구를 바꾼다.
     pub(crate) fn set_edit_binding(&mut self, binding: key_hint::KeyBinding) {
         self.edit_binding = binding;
     }
 
+    /// 🍳 이 함수는 긴 미리보기는 몇 줄만 남기고 나머지는 `…`로 줄인다.
     fn push_truncated_preview_lines(
         lines: &mut Vec<Line<'static>>,
         wrapped: Vec<Line<'static>>,
@@ -60,6 +75,7 @@ impl PendingInputPreview {
         }
     }
 
+    /// 🍳 이 함수는 섹션 제목 앞에 점 표시를 붙여 읽기 쉽게 줄 머리를 만든다.
     fn push_section_header(lines: &mut Vec<Line<'static>>, width: u16, header: Line<'static>) {
         let mut spans = vec!["• ".dim()];
         spans.extend(header.spans);
@@ -69,6 +85,7 @@ impl PendingInputPreview {
         ));
     }
 
+    /// 🍳 이 함수는 현재 대기 상태를 실제 렌더링 가능한 문단으로 바꾼다.
     fn as_renderable(&self, width: u16) -> Box<dyn Renderable> {
         if (self.pending_steers.is_empty()
             && self.rejected_steers.is_empty()

@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   slash 명령 popup의 후보 목록 필터링, 선택 이동, 렌더링용 행 생성을 담당한다.
+//!   비유로 말하면 `/`를 눌렀을 때 나오는 메뉴판에서 검색어에 맞는 항목만 골라 보여 주는 주문 도우미다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane/chat_composer.rs`
+//!   - slash command 선택 popup UI
+//!
+//! 🧩 핵심 개념:
+//!   - filter = 사용자가 친 `/pla` 같은 앞부분으로 후보를 좁히는 검색어
+//!   - `ScrollState` = 현재 선택 위치와 스크롤 범위를 기억하는 번호표
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::WidgetRef;
@@ -14,20 +26,24 @@ use crate::slash_command::SlashCommand;
 // Hide alias commands in the default popup list so each unique action appears once.
 // `quit` is an alias of `exit`, so we skip `quit` here.
 // `approvals` is an alias of `permissions`.
+// 🍳 같은 행동의 별명 명령은 기본 목록에서 숨겨서 메뉴판이 중복으로 길어지지 않게 한다.
 const ALIAS_COMMANDS: &[SlashCommand] = &[SlashCommand::Quit, SlashCommand::Approvals];
 
 /// A selectable item in the popup.
+/// 🍳 이 enum은 popup에서 고를 수 있는 항목 종류를 담는다.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CommandItem {
     Builtin(SlashCommand),
 }
 
+/// 🍳 이 구조체는 현재 필터와 스크롤 위치를 가진 slash command popup 본체다.
 pub(crate) struct CommandPopup {
     command_filter: String,
     builtins: Vec<(&'static str, SlashCommand)>,
     state: ScrollState,
 }
 
+/// 🍳 이 구조체는 popup에 어떤 명령을 보여 줄지 켜고 끄는 기능 플래그 묶음이다.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct CommandPopupFlags {
     pub(crate) collaboration_modes_enabled: bool,
@@ -56,6 +72,7 @@ impl From<CommandPopupFlags> for slash_commands::BuiltinCommandFlags {
 }
 
 impl CommandPopup {
+    /// 🍳 이 함수는 기능 플래그에 맞춰 보일 builtin 명령 목록을 채운 새 popup을 만든다.
     pub(crate) fn new(flags: CommandPopupFlags) -> Self {
         // Keep built-in availability in sync with the composer.
         let builtins: Vec<(&'static str, SlashCommand)> =
@@ -75,6 +92,7 @@ impl CommandPopup {
     /// passed in is expected to start with a leading '/'. Everything after the
     /// *first* '/' on the *first* line becomes the active filter that is used
     /// to narrow down the list of available commands.
+    /// 🍳 이 함수는 현재 composer 첫 줄을 읽어 popup 필터 문자열을 갱신한다.
     pub(crate) fn on_composer_text_change(&mut self, text: String) {
         let first_line = text.lines().next().unwrap_or("");
 
@@ -104,6 +122,7 @@ impl CommandPopup {
 
     /// Determine the preferred height of the popup for a given width.
     /// Accounts for wrapped descriptions so that long tooltips don't overflow.
+    /// 🍳 이 함수는 현재 후보 설명 길이까지 고려해 popup 높이를 계산한다.
     pub(crate) fn calculate_required_height(&self, width: u16) -> u16 {
         use super::selection_popup_common::measure_rows_height;
         let rows = self.rows_from_matches(self.filtered());
@@ -114,6 +133,7 @@ impl CommandPopup {
     /// Compute exact/prefix matches over built-in commands and user prompts,
     /// paired with optional highlight indices. Preserves the original
     /// presentation order for built-ins and prompts.
+    /// 🍳 이 함수는 필터에 맞는 명령만 exact/prefix 규칙으로 골라 하이라이트 위치와 함께 만든다.
     fn filtered(&self) -> Vec<(CommandItem, Option<Vec<usize>>)> {
         let filter = self.command_filter.trim();
         let mut out: Vec<(CommandItem, Option<Vec<usize>>)> = Vec::new();
@@ -163,10 +183,12 @@ impl CommandPopup {
         out
     }
 
+    /// 🍳 이 함수는 필터 결과에서 실제 선택 가능한 항목만 뽑는다.
     fn filtered_items(&self) -> Vec<CommandItem> {
         self.filtered().into_iter().map(|(c, _)| c).collect()
     }
 
+    /// 🍳 이 함수는 필터 결과를 렌더링용 행(`GenericDisplayRow`) 목록으로 바꾼다.
     fn rows_from_matches(
         &self,
         matches: Vec<(CommandItem, Option<Vec<usize>>)>,
@@ -193,6 +215,7 @@ impl CommandPopup {
     }
 
     /// Move the selection cursor one step up.
+    /// 🍳 위쪽 항목으로 선택을 한 칸 움직인다.
     pub(crate) fn move_up(&mut self) {
         let len = self.filtered_items().len();
         self.state.move_up_wrap(len);
@@ -200,6 +223,7 @@ impl CommandPopup {
     }
 
     /// Move the selection cursor one step down.
+    /// 🍳 아래쪽 항목으로 선택을 한 칸 움직인다.
     pub(crate) fn move_down(&mut self) {
         let matches_len = self.filtered_items().len();
         self.state.move_down_wrap(matches_len);
@@ -208,6 +232,7 @@ impl CommandPopup {
     }
 
     /// Return currently selected command, if any.
+    /// 🍳 현재 강조된 명령을 있으면 돌려준다.
     pub(crate) fn selected_item(&self) -> Option<CommandItem> {
         let matches = self.filtered_items();
         self.state

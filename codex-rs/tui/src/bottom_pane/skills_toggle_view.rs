@@ -1,3 +1,15 @@
+//! 📄 이 파일이 하는 일:
+//!   설치된 skill 목록을 검색하면서 켜고 끌 수 있는 popup view를 제공한다.
+//!   비유로 말하면 기능 스위치 목록표에서 필요한 skill만 검색해 체크박스로 켜고 끄는 제어판이다.
+//!
+//! 🔗 누가 이걸 쓰나:
+//!   - `codex-rs/tui/src/bottom_pane`
+//!   - skill 관리 popup
+//!
+//! 🧩 핵심 개념:
+//!   - `filtered_indices` = 검색어에 맞는 실제 skill 항목 번호표
+//!   - `SetSkillEnabled` 이벤트 = 사용자가 토글한 결과를 바깥 app에 알리는 신호
+
 use std::path::PathBuf;
 
 use crossterm::event::KeyCode;
@@ -33,6 +45,7 @@ use super::selection_popup_common::render_rows_single_line;
 const SEARCH_PLACEHOLDER: &str = "Type to search skills";
 const SEARCH_PROMPT_PREFIX: &str = "> ";
 
+/// 🍳 skill 하나의 이름/설명/켜짐 상태를 담는 카드다.
 pub(crate) struct SkillsToggleItem {
     pub name: String,
     pub skill_name: String,
@@ -41,6 +54,7 @@ pub(crate) struct SkillsToggleItem {
     pub path: PathBuf,
 }
 
+/// 🍳 skill on/off popup 전체 상태를 들고 있는 본체다.
 pub(crate) struct SkillsToggleView {
     items: Vec<SkillsToggleItem>,
     state: ScrollState,
@@ -53,6 +67,7 @@ pub(crate) struct SkillsToggleView {
 }
 
 impl SkillsToggleView {
+    /// 🍳 이 함수는 skill 토글 popup을 초기화한다.
     pub(crate) fn new(items: Vec<SkillsToggleItem>, app_event_tx: AppEventSender) -> Self {
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Enable/Disable Skills".bold()));
@@ -74,14 +89,17 @@ impl SkillsToggleView {
         view
     }
 
+    /// 현재 필터 뒤에 보이는 항목 수를 돌려준다.
     fn visible_len(&self) -> usize {
         self.filtered_indices.len()
     }
 
+    /// popup에 한 번에 보여 줄 최대 행 수를 계산한다.
     fn max_visible_rows(len: usize) -> usize {
         MAX_POPUP_ROWS.min(len.max(1))
     }
 
+    /// 🍳 이 함수는 현재 검색어로 skill 목록을 다시 걸러 보고 선택 위치를 유지한다.
     fn apply_filter(&mut self) {
         // Filter + sort while preserving the current selection when possible.
         let previously_selected = self
@@ -127,6 +145,7 @@ impl SkillsToggleView {
         self.state.ensure_visible(len, visible);
     }
 
+    /// 🍳 필터 결과를 렌더링용 체크박스 행들로 바꾼다.
     fn build_rows(&self) -> Vec<GenericDisplayRow> {
         self.filtered_indices
             .iter()
@@ -148,6 +167,7 @@ impl SkillsToggleView {
             .collect()
     }
 
+    /// 위쪽 skill로 선택을 한 칸 움직인다.
     fn move_up(&mut self) {
         let len = self.visible_len();
         self.state.move_up_wrap(len);
@@ -155,6 +175,7 @@ impl SkillsToggleView {
         self.state.ensure_visible(len, visible);
     }
 
+    /// 아래쪽 skill로 선택을 한 칸 움직인다.
     fn move_down(&mut self) {
         let len = self.visible_len();
         self.state.move_down_wrap(len);
@@ -162,6 +183,7 @@ impl SkillsToggleView {
         self.state.ensure_visible(len, visible);
     }
 
+    /// 🍳 현재 선택된 skill의 enabled 상태를 뒤집고 app 이벤트를 보낸다.
     fn toggle_selected(&mut self) {
         let Some(idx) = self.state.selected_idx else {
             return;
@@ -180,6 +202,7 @@ impl SkillsToggleView {
         });
     }
 
+    /// 🍳 popup을 닫고 skill 목록 재로드를 요청한다.
     fn close(&mut self) {
         if self.complete {
             return;
@@ -190,10 +213,12 @@ impl SkillsToggleView {
             .list_skills(Vec::new(), /*force_reload*/ true);
     }
 
+    /// 렌더링 행이 쓸 수 있는 실제 폭을 계산한다.
     fn rows_width(total_width: u16) -> u16 {
         total_width.saturating_sub(2)
     }
 
+    /// 현재 행 수에 맞는 높이를 계산한다.
     fn rows_height(&self, rows: &[GenericDisplayRow]) -> u16 {
         rows.len().clamp(1, MAX_POPUP_ROWS).try_into().unwrap_or(1)
     }
