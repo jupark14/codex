@@ -31,6 +31,7 @@ result
 
 # cli tools
 CLAUDE.md
+PROMPT.md
 .claude/
 AGENTS.override.md
 
@@ -92,3 +93,5 @@ CHANGELOG.ignore.md
 __pycache__/
 *.pyc
 
+.omx/
+.omc/
